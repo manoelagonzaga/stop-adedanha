@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* ── Design tokens ── */
+@theme {
+  --color-navy: #1e3a5f;
+  --color-orange: #e8613c;
+}
+
+/* ── Base resets ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Focus ring ── */
+:focus-visible {
+  outline-offset: 2px;
+}
+
+/* ── Animated background shapes ── */
+.bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.35;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+.bg-shape--1 {
+  width: 480px;
+  height: 480px;
+  top: -120px;
+  left: -120px;
+  background: #d6cec6;
+  animation-name: float-1;
+  animation-duration: 18s;
+}
+
+.bg-shape--2 {
+  width: 360px;
+  height: 360px;
+  top: -80px;
+  right: -80px;
+  background: #c9d4de;
+  animation-name: float-2;
+  animation-duration: 22s;
+}
+
+.bg-shape--3 {
+  width: 420px;
+  height: 420px;
+  bottom: -100px;
+  left: 30%;
+  background: #ddd6cc;
+  animation-name: float-3;
+  animation-duration: 26s;
+}
+
+.bg-shape--4 {
+  width: 300px;
+  height: 300px;
+  bottom: -60px;
+  left: -60px;
+  background: #e0d8d0;
+  animation-name: float-4;
+  animation-duration: 20s;
+}
+
+@keyframes float-1 {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to   { transform: translate(40px, 30px) rotate(15deg); }
+}
+
+@keyframes float-2 {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to   { transform: translate(-30px, 40px) rotate(-12deg); }
+}
+
+@keyframes float-3 {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to   { transform: translate(20px, -35px) rotate(8deg); }
+}
+
+@keyframes float-4 {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to   { transform: translate(30px, -20px) rotate(-10deg); }
+}
+
+/* ── Respect prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .bg-shape {
+    animation: none !important;
+  }
+
+  /* Remove letter draw transition */
+  [aria-live="assertive"] {
+    transition: none !important;
+  }
+
+  /* Remove active:scale transitions */
+  button {
+    transition: none !important;
+  }
+}
+
+/* ── Screen-reader only utility ── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
