@@ -32,6 +32,11 @@ jobs:
       - name: Executar o Build
         working-directory: ./frontend
         run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './frontend/dist' 
       
   deploy:
     needs: build
