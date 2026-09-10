@@ -12,8 +12,7 @@ permissions:
 jobs:
   deploy:
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,8 +21,9 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'     
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'   
 
       - name: Instalar dependências
         working-directory: ./frontend
@@ -32,6 +32,17 @@ jobs:
       - name: Executar o Build
         working-directory: ./frontend
         run: npm run build
+      
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       
       - name: Setup Pages
         uses: actions/configure-pages@v5
