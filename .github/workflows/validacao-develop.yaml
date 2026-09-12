@@ -5,12 +5,33 @@ on:
     branches:
       - develop 
 jobs:
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
   valida-backend:
     name: Validação Backend
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     uses: ./.github/workflows/valida-backend.yaml
 
   valida-frontend:
     name: Validação Frontend
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
     uses: ./.github/workflows/valida-frontend.yaml
 
   create-pr:
