@@ -1,0 +1,21 @@
+name: Deploy Prod
+
+on:
+  push:
+    branches:
+      - master 
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    uses: ./.github/workflows/deploy-backend.yaml
+
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: deploy-backend
+    uses: ./.github/workflows/deploy-github-pages.yaml
+  
+  auto-tag:
+    name: Tag & Release
+    needs: deploy-frontend
+    uses: ./.github/workflows/auto-tag.yaml
