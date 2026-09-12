@@ -1,16 +1,12 @@
 name: Auto Tag on Merge
 
 on:
-  workflow_run:
-    workflows: ["Deploy to GitHub Pages"]
-    types:
-      - completed
+  workflow_call:
 
 jobs:
   create-tag:
     name: "Gerar Nova Tag Git"
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write
 
