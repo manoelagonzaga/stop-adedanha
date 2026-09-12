@@ -122,20 +122,6 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
           </h2>
         </div>
 
-        {/* STOP button */}
-        {!submitted && (
-          <button
-            type="button"
-            onClick={handleStop}
-            className="w-full rounded-2xl bg-navy py-4 text-lg font-extrabold uppercase tracking-widest text-white
-                       hover:bg-navy/90 active:scale-[0.97] transition-all
-                       focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange focus-visible:ring-offset-2"
-            aria-label="Parar o jogo — encerra a rodada para todos os jogadores"
-          >
-            Stop<span className="text-orange">!</span>
-          </button>
-        )}
-
         {/* Answers form */}
         <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
           <div className="flex items-center justify-between mb-4">
@@ -195,6 +181,20 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
             )}
           </form>
         </section>
+
+        {/* STOP button */}
+        {!submitted && (
+          <button
+            type="button"
+            onClick={handleStop}
+            className="w-full rounded-2xl bg-navy py-4 text-lg font-extrabold uppercase tracking-widest text-white
+                       hover:bg-navy/90 active:scale-[0.97] transition-all
+                       focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange focus-visible:ring-offset-2"
+            aria-label="Parar o jogo — encerra a rodada para todos os jogadores"
+          >
+            Stop<span className="text-orange">!</span>
+          </button>
+        )}
 
         {/* Timer live region — only announces at milestones, non-intrusive */}
         <div role="timer" aria-live="polite" aria-atomic="true" className="sr-only">

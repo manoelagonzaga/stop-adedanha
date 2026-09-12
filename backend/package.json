@@ -4,8 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "build": "tsc -b",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "",
+    "lint": ""
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",

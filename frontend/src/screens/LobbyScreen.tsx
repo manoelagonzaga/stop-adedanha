@@ -61,55 +61,8 @@ export function LobbyScreen({
 
   return (
     <div className="flex min-h-svh flex-col lg:grid lg:grid-cols-[1fr_25%] gap-4 px-4 py-8 lg:px-8">
-
       {/* ── Main area ── */}
       <main className="flex flex-col gap-5">
-
-        {/* Room header */}
-        <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase mb-0.5">Sala</p>
-            <h2 className="text-2xl font-extrabold text-navy tracking-widest">{room.code}</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={[
-                'rounded-full px-3 py-1 text-xs font-semibold tracking-wide',
-                isHost ? 'bg-orange/15 text-orange' : 'bg-gray-100 text-gray-500',
-              ].join(' ')}
-              aria-label={isHost ? 'Você é o anfitrião desta sala' : 'Você é um convidado'}
-            >
-              {isHost ? 'Anfitrião' : 'Convidado'}
-            </span>
-          </div>
-        </div>
-
-        {/* Number of rounds */}
-        <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5" aria-labelledby="rounds-heading">
-          <h3 id="rounds-heading" className="mb-3 text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
-            Configuração
-          </h3>
-          <div className="flex items-center gap-4">
-            <label htmlFor="total-rounds" className="text-sm font-semibold text-gray-700">
-              Número de rodadas
-            </label>
-            <input
-              id="total-rounds"
-              type="number"
-              min={1}
-              max={10}
-              value={room.totalRounds || 3}
-              onChange={handleRoundsChange}
-              readOnly={!isHost}
-              aria-readonly={!isHost}
-              className={[
-                'w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-bold text-navy',
-                'outline-none transition focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/20',
-                !isHost ? 'bg-gray-50 cursor-not-allowed text-gray-400' : 'bg-white',
-              ].join(' ')}
-            />
-          </div>
-        </section>
 
         {/* Categories */}
         <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5" aria-labelledby="categories-heading">
@@ -200,7 +153,7 @@ export function LobbyScreen({
           )}
         </section>
 
-        {/* Players */}
+        {/* Players 
         <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5" aria-labelledby="players-heading">
           <h3 id="players-heading" className="mb-3 text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
             Jogadores ({room.players.length}/20)
@@ -227,8 +180,61 @@ export function LobbyScreen({
             ))}
           </ul>
         </section>
+        */}
 
-        {/* Start game (host only) */}
+        {/* Status announcements for screen readers */}
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {statusMessage ?? ''}
+        </div>
+      </main>
+      <div className="flex flex-col gap-5">
+              {/* Room header */}
+        <section className="relative h-30 rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase mb-0.5">Sala</p>
+            <h2 className="text-2xl font-extrabold text-navy tracking-widest">{room.code}</h2>
+          </div>
+          <div className="absolute top-5 right-6 flex items-center gap-2">
+            <span
+              className={[
+                'rounded-full px-3 py-1 text-xs font-semibold tracking-wide',
+                isHost ? 'bg-orange/15 text-orange' : 'bg-gray-100 text-gray-500',
+              ].join(' ')}
+              aria-label={isHost ? 'Você é o anfitrião desta sala' : 'Você é um convidado'}
+            >
+              {isHost ? 'Anfitrião' : 'Convidado'}
+            </span>
+          </div>
+        </section>
+
+        {/* Number of rounds */}
+        <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5 " aria-labelledby="rounds-heading">
+          <h3 id="rounds-heading" className="mb-3 text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
+            Configuração
+          </h3>
+          <div className="flex items-center gap-4">
+            <label htmlFor="total-rounds" className="text-sm font-semibold text-gray-700">
+              Número de rodadas
+            </label>
+            <input
+              id="total-rounds"
+              type="number"
+              min={1}
+              max={10}
+              value={room.totalRounds || 3}
+              onChange={handleRoundsChange}
+              readOnly={!isHost}
+              aria-readonly={!isHost}
+              className={[
+                'w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-bold text-navy',
+                'outline-none transition focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/20',
+                !isHost ? 'bg-gray-50 cursor-not-allowed text-gray-400' : 'bg-white',
+              ].join(' ')}
+            />
+          </div>
+        </section>
+
+                {/* Start game (host only) */}
         {isHost && (
           <button
             type="button"
@@ -247,14 +253,9 @@ export function LobbyScreen({
             Aguardando o anfitrião iniciar a partida…
           </p>
         )}
-
-        {/* Status announcements for screen readers */}
-        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {statusMessage ?? ''}
         </div>
-      </main>
 
-      {/* ── Sidebar Scoreboard (last in DOM for screen readers) ── */}
+      {/* ── Sidebar Scoreboard (last in DOM for screen readers) ── 
       <div className="lg:pt-0">
         <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
           <Scoreboard
@@ -264,6 +265,7 @@ export function LobbyScreen({
           />
         </div>
       </div>
+      */}
     </div>
   );
 }
