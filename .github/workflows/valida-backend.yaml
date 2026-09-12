@@ -1,5 +1,8 @@
 name: Valida Backend
 
+on:
+  workflow_call:
+
 jobs:
   lint-back:
     name: Lint

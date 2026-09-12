@@ -6,10 +6,8 @@ on:
       - develop 
 jobs:
   valida-backend:
-    name: Vlidação Backend
+    name: Valida Backend
     uses: ./.github/workflows/valida-backend.yaml
-
-
 
   lint-front:
     name: Lint Frontend
