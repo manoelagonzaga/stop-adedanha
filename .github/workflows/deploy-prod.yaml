@@ -9,6 +9,7 @@ jobs:
   deploy-backend:
     name: Deploy Backend
     uses: ./.github/workflows/deploy-backend.yaml
+    secrets: inherit
 
   deploy-frontend:
     name: Deploy Frontend
