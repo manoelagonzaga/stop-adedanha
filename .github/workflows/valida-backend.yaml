@@ -1,0 +1,77 @@
+name: Validação Backend
+
+on:
+  workflow_call:
+
+jobs:
+  lint-back:
+    name: Lint
+    runs-on: ubuntu-latest
+        
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: './backend/package-lock.json'
+
+      - name: Instalar dependências
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Executar o Lint
+        working-directory: ./backend
+        run: npm run lint
+
+  build-back:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint-back
+        
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: './backend/package-lock.json'
+
+      - name: Instalar dependências
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Executar o Build
+        working-directory: ./backend
+        run: npm run build
+
+  test-back:
+    name: Teste
+    runs-on: ubuntu-latest
+    needs: build-back
+        
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: './backend/package-lock.json'
+
+      - name: Instalar dependências
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Executar o Teste unitário
+        working-directory: ./backend
+        run: npm run test
+

@@ -1,8 +1,10 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [master, develop]
+  workflow_run:
+    workflows: ["Deploy Backend to Cloudflare Workers"]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -14,6 +16,8 @@ jobs:
     environment:
       name: build
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
