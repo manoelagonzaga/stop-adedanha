@@ -88,43 +88,6 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
       {/* ── Main game area ── */}
       <main className="flex flex-col gap-5">
 
-        {/* Round header card */}
-        <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">Letra sorteada</span>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
-                Round {room.currentRound}/{room.totalRounds}
-              </span>
-            </div>
-
-            {/* Timer — visible display */}
-            <div aria-hidden="true" className="text-right">
-              <span className="text-3xl font-extrabold tabular-nums text-navy">
-                {secondsLeft !== null
-                  ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
-                  : `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`}
-              </span>
-              <p className="text-xs text-gray-400">
-                {room.players.filter((p: Player) => p.status === 'active').length} jogando
-              </p>
-            </div>
-          </div>
-
-          {/* Drawn letter — animated, announced immediately */}
-          <h2
-            className={[
-              'mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300',
-              letterVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-50',
-            ].join(' ')}
-            aria-label={`Letra sorteada: ${letter}`}
-            aria-live="assertive"
-            aria-atomic="true"
-          >
-            {letter}
-          </h2>
-        </div>
-
         {/* Answers form */}
         <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
           <div className="flex items-center justify-between mb-4">
@@ -207,6 +170,45 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
 
       {/* ── Sidebar Scoreboard — last in DOM ── */}
       <div>
+        {/* Round header card */}
+        <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5 mb-4">
+
+          <span className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">Letra sorteada</span>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+                Round {room.currentRound}/{room.totalRounds}
+              </span>
+            </div>
+
+            {/* Timer — visible display */}
+            <div aria-hidden="true" className="text-right">
+              <span className="text-3xl font-extrabold tabular-nums text-navy">
+                {secondsLeft !== null
+                  ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
+                  : `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`}
+              </span>
+              <p className="text-xs text-gray-400">
+                {room.players.filter((p: Player) => p.status === 'active').length} jogando
+              </p>
+            </div>
+          </div>
+
+          {/* Drawn letter — animated, announced immediately */}
+          <h2
+            className={[
+              'mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300',
+              letterVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-50',
+            ].join(' ')}
+            aria-label={`Letra sorteada: ${letter}`}
+            aria-live="assertive"
+            aria-atomic="true"
+          >
+            {letter}
+          </h2>
+        </div>
+
         <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
           <Scoreboard
             players={room.players}
