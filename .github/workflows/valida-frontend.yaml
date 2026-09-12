@@ -1,10 +1,10 @@
-name: Validação Backend
+name: Validação Frontend
 
 on:
   workflow_call:
 
 jobs:
-  lint-back:
+  lint-front:
     name: Lint
     runs-on: ubuntu-latest
         
@@ -17,20 +17,20 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
+          cache-dependency-path: './frontend/package-lock.json'
 
       - name: Instalar dependências
-        working-directory: ./backend
+        working-directory: ./frontend
         run: npm ci
 
       - name: Executar o Lint
-        working-directory: ./backend
+        working-directory: ./frontend
         run: npm run lint
 
-  build-back:
+  build-front:
     name: Build
     runs-on: ubuntu-latest
-    needs: lint-back
+    needs: lint-front
         
     steps:
       - name: Checkout repository
@@ -41,20 +41,20 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
+          cache-dependency-path: './frontend/package-lock.json'
 
       - name: Instalar dependências
-        working-directory: ./backend
+        working-directory: ./frontend
         run: npm ci
 
       - name: Executar o Build
-        working-directory: ./backend
+        working-directory: ./frontend
         run: npm run build
 
-  test-back:
+  test-front:
     name: Teste
     runs-on: ubuntu-latest
-    needs: build-back
+    needs: build-front
         
     steps:
       - name: Checkout repository
@@ -65,13 +65,12 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
+          cache-dependency-path: './frontend/package-lock.json'
 
       - name: Instalar dependências
-        working-directory: ./backend
+        working-directory: ./frontend
         run: npm ci
 
       - name: Executar o Teste unitário
-        working-directory: ./backend
+        working-directory: ./frontend
         run: npm run test
-
