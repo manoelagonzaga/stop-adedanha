@@ -19,6 +19,9 @@ const ANNOUNCE_MILESTONES = [30, 10, 5];
 export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
   const letter = room.currentLetter ?? '?';
   const roundId = `round-${room.currentRound}`;
+  const myPlayerId = _myPlayerId;
+
+  console.log('user: ', myPlayerId);
 
   // Local answers keyed by categoryId
   const [answers, setAnswers] = useState<Record<string, string>>({});

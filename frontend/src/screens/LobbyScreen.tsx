@@ -255,7 +255,7 @@ export function LobbyScreen({
         )}
         </div>
 
-      {/* ── Sidebar Scoreboard (last in DOM for screen readers) ── 
+      {/* ── Sidebar Scoreboard (last in DOM for screen readers) ── */}
       <div className="lg:pt-0">
         <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
           <Scoreboard
@@ -265,7 +265,7 @@ export function LobbyScreen({
           />
         </div>
       </div>
-      */}
+      
     </div>
   );
 }
