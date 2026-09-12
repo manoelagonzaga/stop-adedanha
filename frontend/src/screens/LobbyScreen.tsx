@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { RoomState, Category, Player } from '../types';
-import { Scoreboard } from '../components/Scoreboard';
 
 const SUGGESTED_CATEGORIES = [
   'Nome',
@@ -208,7 +207,7 @@ export function LobbyScreen({
             )}
           </section>
 
-          {/* Players 
+          {/* Players */}
           <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5" aria-labelledby="players-heading">
             <h3 id="players-heading" className="mb-3 text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
               Jogadores ({room.players.length}/20)
@@ -235,7 +234,7 @@ export function LobbyScreen({
               ))}
             </ul>
           </section>
-          */}
+          
 
           {/* Status announcements for screen readers */}
           <div
@@ -311,16 +310,6 @@ export function LobbyScreen({
           )}
         </div>
 
-        {/* ── Sidebar Scoreboard (last in DOM for screen readers) ── */}
-        {/* <div className="lg:pt-0">
-          <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
-            <Scoreboard
-              players={room.players}
-              currentRound={room.currentRound}
-              totalRounds={room.totalRounds}
-            />
-          </div>
-        </div> */}
       </div>
     </div>
   );
