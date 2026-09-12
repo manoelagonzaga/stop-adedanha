@@ -5,7 +5,6 @@ on:
     branches:
       - develop 
 jobs:
-
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -37,6 +36,12 @@ jobs:
   create-pr:
     name: "Criar PR para Master"
     needs: [valida-backend, valida-frontend]
+    if: |
+      always() &&
+      needs.valida-backend.result != 'failed' &&
+      needs.valida-backend.result != 'cancelled' &&
+      needs.valida-frontend.result != 'failed' &&
+      needs.valida-frontend.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       contents: write

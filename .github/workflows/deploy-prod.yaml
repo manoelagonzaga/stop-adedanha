@@ -6,17 +6,46 @@ on:
       - master 
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
   deploy-backend:
     name: Deploy Backend
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     uses: ./.github/workflows/deploy-backend.yaml
     secrets: inherit
 
   deploy-frontend:
     name: Deploy Frontend
-    needs: deploy-backend
+    needs: [deploy-backend, changes]
+    if: |
+      always() &&
+      ${{ needs.changes.outputs.frontend == 'true' }} &&
+      needs.deploy-backend.result != 'failed' &&
+      needs.deploy-backend.result != 'cancelled' 
     uses: ./.github/workflows/deploy-github-pages.yaml
   
   auto-tag:
     name: Tag & Release
-    needs: deploy-frontend
+    needs: [deploy-backend, deploy-frontend]
+    if: |
+      always() &&
+      needs.valida-backend.result != 'failed' &&
+      needs.valida-backend.result != 'cancelled' &&
+      needs.valida-frontend.result != 'failed' &&
+      needs.valida-frontend.result != 'cancelled'
     uses: ./.github/workflows/auto-tag.yaml
