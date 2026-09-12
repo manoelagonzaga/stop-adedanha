@@ -12,3 +12,36 @@ jobs:
   valida-frontend:
     name: Validação Frontend
     uses: ./.github/workflows/valida-frontend.yaml
+
+  create-pr:
+    name: "Criar PR para Master"
+    needs: [valida-backend, valida-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Open Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extrai o nome da branch atual
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          
+          # Verifica se já existe um PR aberto para essa branch
+          PR_EXISTS=$(gh pr list --head "$BRANCH_NAME" --base master --json number --jq 'length')
+          
+          if [ "$PR_EXISTS" -eq "0" ]; then
+            echo "Criando novo PR..."
+            gh pr create \
+              --title "feat: Merge $BRANCH_NAME na master" \
+              --body "Pull Request criado automaticamente via GitHub Actions após push na branch \`$BRANCH_NAME\`." \
+              --base master \
+              --head "$BRANCH_NAME"
+          else
+            echo "PR já existe para esta branch. Nenhuma ação necessária."
+          fi

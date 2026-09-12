@@ -1,0 +1,39 @@
+name: Auto Tag on Merge
+
+on:
+  workflow_run:
+    workflows: ["Deploy to GitHub Pages"]
+    types:
+      - completed
+
+jobs:
+  create-tag:
+    name: "Gerar Nova Tag Git"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necessário buscar todo o histórico para calcular a próxima versão corretamente
+
+      # Cria e faz o push da tag automática baseada em Conventional Commits
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch # Se a mensagem do commit não indicar alteração, incrementa o patch (ex: v1.0.0 -> v1.0.1)
+          release_branches: main
+
+      # (Opcional) Cria uma Release visual no GitHub vinculada à nova tag
+      - name: Create a GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
