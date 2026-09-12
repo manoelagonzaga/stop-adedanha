@@ -22,6 +22,17 @@ jobs:
       - name: Instalar dependências
         working-directory: ./backend
         run: npm ci
+      
+      - name: Checar presença do Secret
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "❌ CRÍTICO: A secret CLOUDFLARE_API_TOKEN está vazia no repositório."
+            exit 1
+          else
+            echo "✅ Secret encontrada! Tamanho do token: ${#TOKEN} caracteres."
+          fi
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
