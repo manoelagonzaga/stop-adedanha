@@ -23,7 +23,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch # Se a mensagem do commit não indicar alteração, incrementa o patch (ex: v1.0.0 -> v1.0.1)
-          release_branches: main
+          release_branches: master
 
       # (Opcional) Cria uma Release visual no GitHub vinculada à nova tag
       - name: Create a GitHub Release

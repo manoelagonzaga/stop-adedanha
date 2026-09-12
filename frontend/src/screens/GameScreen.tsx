@@ -27,6 +27,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [letterVisible, setLetterVisible] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Countdown state
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -77,53 +78,58 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
   }
 
   function handleStop() {
+    formRef.current?.requestSubmit();
     onStop(roundId);
   }
 
   const totalSeconds = room.categories.length * 20;
 
   return (
-    <div className="flex min-h-svh flex-col lg:grid lg:grid-cols-[1fr_25%] gap-4 px-4 py-8 lg:px-8">
+    <div className="flex min-h-svh flex-col lg:grid lg:grid-cols-[1fr_3fr_1fr] gap-4 px-4 py-8 lg:px-8">
+
+      {/* Round header card */}
+      <div className="flex flex-col gap-5 rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
+      <div>
+
+
+        <span className="text-base font-bold tracking-widest text-navy uppercase">Letra sorteada</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400 font-medium tracking-wide">
+              Round {room.currentRound}/{room.totalRounds}
+            </span>
+          </div>
+          </div>
+
+        {/* Drawn letter — animated, announced immediately */}
+        <h2
+          className={[
+            'mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300',
+            letterVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-50',
+          ].join(' ')}
+          aria-label={`Letra sorteada: ${letter}`}
+          aria-live="assertive"
+          aria-atomic="true"
+        >
+          {letter}
+        </h2>
+      </div>
+
+      {/* Timer — visible display */}
+      <div aria-hidden="true" className="text-center">
+        <span className="text-3xl font-extrabold tabular-nums text-navy">
+          {secondsLeft !== null
+            ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
+            : `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`}
+        </span>
+        <p className="text-xs text-gray-400">
+          {room.players.filter((p: Player) => p.status === 'active').length} jogando
+        </p>
+      </div>
+      </div>
 
       {/* ── Main game area ── */}
       <main className="flex flex-col gap-5">
-
-        {/* Round header card */}
-        <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">Letra sorteada</span>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
-                Round {room.currentRound}/{room.totalRounds}
-              </span>
-            </div>
-
-            {/* Timer — visible display */}
-            <div aria-hidden="true" className="text-right">
-              <span className="text-3xl font-extrabold tabular-nums text-navy">
-                {secondsLeft !== null
-                  ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
-                  : `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`}
-              </span>
-              <p className="text-xs text-gray-400">
-                {room.players.filter((p: Player) => p.status === 'active').length} jogando
-              </p>
-            </div>
-          </div>
-
-          {/* Drawn letter — animated, announced immediately */}
-          <h2
-            className={[
-              'mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300',
-              letterVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-50',
-            ].join(' ')}
-            aria-label={`Letra sorteada: ${letter}`}
-            aria-live="assertive"
-            aria-atomic="true"
-          >
-            {letter}
-          </h2>
-        </div>
 
         {/* Answers form */}
         <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
@@ -134,7 +140,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
             </span>
           </div>
 
-          <form id="answers-form" onSubmit={handleSubmit}>
+          <form id="answers-form" ref={formRef}  onSubmit={handleSubmit}>
             <ul className="flex flex-col gap-3" aria-label="Formulário de respostas">
               {room.categories.map((cat: Category) => (
                 <li key={cat.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
@@ -166,7 +172,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
               ))}
             </ul>
 
-            {!submitted && (
+            {/* {!submitted && (
               <button
                 type="submit"
                 form="answers-form"
@@ -176,7 +182,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
               >
                 Enviar respostas
               </button>
-            )}
+            )} */}
             {submitted && (
               <p role="status" aria-live="polite" className="mt-4 text-center text-sm font-semibold text-gray-500">
                 ✓ Respostas enviadas — aguardando os outros jogadores…
@@ -206,14 +212,12 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
       </main>
 
       {/* ── Sidebar Scoreboard — last in DOM ── */}
-      <div>
-        <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
-          <Scoreboard
-            players={room.players}
-            currentRound={room.currentRound}
-            totalRounds={room.totalRounds}
-          />
-        </div>
+      <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
+        <Scoreboard
+          players={room.players}
+          currentRound={room.currentRound}
+          totalRounds={room.totalRounds}
+        />
       </div>
     </div>
   );
