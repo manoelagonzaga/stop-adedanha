@@ -34,7 +34,7 @@ jobs:
     needs: [deploy-backend, changes]
     if: |
       always() &&
-      ${{ needs.changes.outputs.frontend == 'true' }} &&
+      needs.changes.outputs.frontend == 'true' &&
       needs.deploy-backend.result != 'failed' &&
       needs.deploy-backend.result != 'cancelled' 
     uses: ./.github/workflows/deploy-github-pages.yaml
