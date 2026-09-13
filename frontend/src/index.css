@@ -26,6 +26,10 @@ body {
   outline-offset: 2px;
 }
 
+.animate-letter-lock {
+  animation: letter-lock 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
 /* ── Animated background shapes ── */
 .bg-shape {
   position: absolute;

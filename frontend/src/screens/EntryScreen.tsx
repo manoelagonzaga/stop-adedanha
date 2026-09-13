@@ -32,7 +32,6 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error, isLoading }: Ent
     // Generates a random 4-char code locally (the real one comes from the server on room:create)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const code = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    console.log(code)
     setRoomCode(code);
     return code;
   }
