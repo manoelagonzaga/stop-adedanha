@@ -65,7 +65,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
 
         return () => clearInterval(intervalId);
       }
-    }, [isStopped]);
+    }, [timeLeft, isStopped]);
 
     const formatTime = (seconds: number) => {
       const minutes = Math.floor(seconds / 60);
