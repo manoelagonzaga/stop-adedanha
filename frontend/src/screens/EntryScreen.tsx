@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 interface EntryScreenProps {
   onEnterRoom: (nickname: string, roomCode: string) => void;
-  onCreateRoom: (nickname: string) => void;
+  onCreateRoom: (nickname: string, roomCode: string) => void;
   error?: string | null;
   isLoading?: boolean;
 }
@@ -23,7 +23,8 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error, isLoading }: Ent
     if (trimmedCode) {
       onEnterRoom(trimmedNickname, trimmedCode);
     } else {
-      onCreateRoom(trimmedNickname);
+      const code = handleGenerateCode();
+      onCreateRoom(trimmedNickname, code.trim());
     }
   }
 
@@ -31,7 +32,9 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error, isLoading }: Ent
     // Generates a random 4-char code locally (the real one comes from the server on room:create)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const code = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    console.log(code)
     setRoomCode(code);
+    return code;
   }
 
   const canSubmit = nickname.trim().length > 0 && !isLoading;
@@ -96,15 +99,6 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error, isLoading }: Ent
                   className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-mono tracking-widest text-gray-800 placeholder-gray-300
                              outline-none transition focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/20 uppercase"
                 />
-                <button
-                  type="button"
-                  onClick={handleGenerateCode}
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-600
-                             hover:border-navy/30 hover:text-navy transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40"
-                  aria-label="Gerar código de sala aleatório"
-                >
-                  Nova
-                </button>
               </div>
             </div>
 
