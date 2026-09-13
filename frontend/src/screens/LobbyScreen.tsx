@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { RoomState, Category, Player } from '../types';
 
 const SUGGESTED_CATEGORIES = [
@@ -40,13 +40,6 @@ export function LobbyScreen({
   onStartGame,
   statusMessage,
 }: LobbyScreenProps) {
-  useEffect(() => {
-    if (myPlayerId) {
-        console.log('--> ', myPlayerId)
-    }
-  }, [myPlayerId]);
-
-  console.log(room, myPlayerId)
   const me = room.players.find((p: Player) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
 

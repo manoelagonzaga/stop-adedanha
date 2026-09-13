@@ -9,36 +9,40 @@ interface GameScreenProps {
   onStop: (roundId: string) => void;
 }
 
-// Milestones at which the timer announces itself to screen readers (in seconds)
-const ANNOUNCE_MILESTONES = [30, 10, 5];
+
+const LETTERS = [
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+  "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+] as const;
 
 /**
  * Tela 3 — Rodada Ativa.
  * DOM order: round header → drawn letter (h2) → stop button → answers form → scoreboard (aside).
  */
 export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
-  const letter = room.currentLetter ?? '?';
   const roundId = `round-${room.currentRound}`;
-  const myPlayerId = _myPlayerId;
-
-  console.log('user: ', myPlayerId);
+  
+  console.log('user: ', _myPlayerId);
 
   // Local answers keyed by categoryId
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [letterVisible, setLetterVisible] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   // Countdown state
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-  const [announcedTime, setAnnouncedTime] = useState<string>('');
+  const [announcedTime] = useState<string>('');
   const announcedMilestonesRef = useRef<Set<number>>(new Set());
+
+  const [letter, setLetter] = useState<string>(() => generateLetter());
+  const [displayLetter, setDisplayLetter] = useState<string>(letter);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [isStopped, setIsStopped] = useState(false);
 
   // Animate letter in
   useEffect(() => {
-    setLetterVisible(false);
-    const t = setTimeout(() => setLetterVisible(true), 80);
-    return () => clearTimeout(t);
+    const nextLetter = generateLetter();
+    setLetter(nextLetter);
+    drawLetter(nextLetter);
   }, [letter]);
 
   // Reset answers when round changes
@@ -48,27 +52,35 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
     announcedMilestonesRef.current.clear();
   }, [room.currentRound]);
 
-  // Countdown timer driven by server deadline
-  useEffect(() => {
-    if (!room.roundDeadline) return;
+  function CountdownTimer( initialSeconds = room.categories.length * 20) {
+    const [timeLeft, setTimeLeft] = useState(initialSeconds);
+    
+    useEffect(() => {
+      if (isStopped) {
+        if (timeLeft <= 0) return;
 
-    const tick = () => {
-      const remaining = Math.max(0, Math.round((room.roundDeadline! - Date.now()) / 1000));
-      setSecondsLeft(remaining);
+        const intervalId = setInterval(() => {
+          setTimeLeft((prevTime) => prevTime - 1);
+        }, 1000);
 
-      // Announce milestones to screen readers (non-disruptively)
-      for (const ms of ANNOUNCE_MILESTONES) {
-        if (remaining <= ms && !announcedMilestonesRef.current.has(ms)) {
-          announcedMilestonesRef.current.add(ms);
-          setAnnouncedTime(remaining === 0 ? 'Tempo esgotado!' : `${remaining} segundos restantes`);
-        }
+        return () => clearInterval(intervalId);
       }
+    }, [timeLeft, isStopped]);
+
+    const formatTime = (seconds: number) => {
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     };
 
-    tick();
-    const id = setInterval(tick, 500);
-    return () => clearInterval(id);
-  }, [room.roundDeadline]);
+    return (
+      <div>
+        <h2>{formatTime(timeLeft)}</h2>
+        {timeLeft === 0 && <p>O tempo acabou!</p>}
+      </div>
+    );
+    
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,7 +94,26 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
     onStop(roundId);
   }
 
-  const totalSeconds = room.categories.length * 20;
+  function generateLetter(): string {
+    return LETTERS[Math.floor(Math.random() * LETTERS.length)] ?? "A";
+  }
+
+  function drawLetter(finalLetter: string) {
+    setIsDrawing(true);
+    let steps = 0;
+    const maxSteps = 22;
+    const interval = setInterval(() => {
+      steps = steps + 1;
+      setDisplayLetter(LETTERS[Math.floor(Math.random() * LETTERS.length)] ?? finalLetter);
+      if (steps >= maxSteps) {
+        setIsStopped(true);
+        setDisplayLetter(finalLetter);
+        setIsDrawing(false);
+        clearInterval(interval);
+      }
+    }, 70);
+  }
+
 
   return (
     <div className="flex min-h-svh flex-col lg:grid lg:grid-cols-[1fr_3fr_1fr] gap-4 px-4 py-8 lg:px-8">
@@ -102,25 +133,24 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
           </div>
 
         {/* Drawn letter — animated, announced immediately */}
-        <h2
-          className={[
-            'mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300',
-            letterVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-50',
-          ].join(' ')}
-          aria-label={`Letra sorteada: ${letter}`}
-          aria-live="assertive"
-          aria-atomic="true"
-        >
-          {letter}
-        </h2>
+        <div className="grid place-items-center">
+          <span
+            key={displayLetter + (isDrawing ? "-draw" : "-lock")}
+            className={`mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300 ${isDrawing ? "animate-letter-shuffle" : "animate-letter-lock"}`}
+            aria-label={`Letra sorteada: ${letter}`}
+            aria-live="assertive"
+            aria-atomic="true"
+          >
+            {displayLetter}
+          </span>
+        </div>
+
       </div>
 
       {/* Timer — visible display */}
       <div aria-hidden="true" className="text-center">
         <span className="text-3xl font-extrabold tabular-nums text-navy">
-          {secondsLeft !== null
-            ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
-            : `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`}
+          {CountdownTimer()}
         </span>
         <p className="text-xs text-gray-400">
           {room.players.filter((p: Player) => p.status === 'active').length} jogando
@@ -134,7 +164,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
         {/* Answers form */}
         <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-800">Categorias</h3>
+            <h3 className="text-base font-bold text-gray-800 uppercase">Categorias</h3>
             <span className="text-xs text-gray-400">
               {Object.values(answers).filter(Boolean).length}/{room.categories.length}
             </span>
