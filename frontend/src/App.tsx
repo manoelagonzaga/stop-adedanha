@@ -23,7 +23,7 @@ const DEMO_ROOM: RoomState = {
     { id: 'cat-4', name: 'Objeto' },
   ],
   currentRound: 2,
-  totalRounds: 3,
+  totalRounds: 4,
   currentLetter: 'S',
   roundDeadline: Date.now() + 60_000,
 };
