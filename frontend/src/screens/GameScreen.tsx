@@ -22,6 +22,8 @@ const LETTERS = [
 export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
   const roundId = `round-${room.currentRound}`;
   
+  console.log('user: ', _myPlayerId);
+
   // Local answers keyed by categoryId
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -50,7 +52,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
     announcedMilestonesRef.current.clear();
   }, [room.currentRound]);
 
-  function countdownTimer( initialSeconds = room.categories.length * 20) {
+  function CountdownTimer( initialSeconds = room.categories.length * 20) {
     const [timeLeft, setTimeLeft] = useState(initialSeconds);
     
     useEffect(() => {
@@ -63,7 +65,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
 
         return () => clearInterval(intervalId);
       }
-    }, [timeLeft, isStopped]);
+    }, [isStopped]);
 
     const formatTime = (seconds: number) => {
       const minutes = Math.floor(seconds / 60);
@@ -148,7 +150,7 @@ export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onS
       {/* Timer — visible display */}
       <div aria-hidden="true" className="text-center">
         <span className="text-3xl font-extrabold tabular-nums text-navy">
-          {countdownTimer()}
+          {CountdownTimer()}
         </span>
         <p className="text-xs text-gray-400">
           {room.players.filter((p: Player) => p.status === 'active').length} jogando
