@@ -4,14 +4,15 @@ import { EntryScreen } from './screens/EntryScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
-import type { RoomState, Answer } from './types';
+import type { RoomState, Answer, Player } from './types';
+import { v4 as uuidv4 } from 'uuid';
 
 // ── Demo stub state — replace with real WebSocket state in task 4 ──
 const DEMO_ROOM: RoomState = {
   code: 'XYD-7',
   phase: 'CONFIGURING',
   players: [
-    { id: 'p1', nickname: 'Rafael Bezerra', isHost: true, status: 'active', score: 140 },
+    { id: 'p1', nickname: 'Rafael Bezerra', isHost: false, status: 'active', score: 140 },
     { id: 'p2', nickname: 'Marina C.', isHost: false, status: 'active', score: 95 },
     { id: 'p3', nickname: 'Diego F.', isHost: false, status: 'active', score: 62 },
   ],
@@ -41,18 +42,45 @@ type UIScreen = 'início' | 'configuração' | 'jogo' | 'resultado';
 export default function App() {
   const [screen, setScreen] = useState<UIScreen>('início');
   const [room, setRoom] = useState<RoomState>(DEMO_ROOM);
-  const MY_ID = 'p1';
+  const [MY_ID, setMY_ID] = useState<string>('p1');
 
   // ── Screen navigation stubs (will be replaced by WebSocket events in task 4) ──
   function handleEnterRoom(nickname: string, code: string) {
     console.log('Joining room', code, 'as', nickname);
+    const player = newPlayer(nickname, false);
+
+    setRoom((r: RoomState) => ({
+      ...r,
+      code,
+      players: [...r.players, player]
+    }));
+    setMY_ID(player.id);
     setScreen('configuração');
   }
 
-  function handleCreateRoom(nickname: string) {
-    console.log('Creating room as', nickname);
+  function handleCreateRoom(nickname: string, code: string) {
+    const hostPlayer = newPlayer(nickname, true);
+    setRoom((r: RoomState) => ({
+      ...r,
+      code,
+      players: [hostPlayer]
+      }
+    ));
+    setMY_ID(hostPlayer.id);
     setScreen('configuração');
   }
+
+  function newPlayer(nickname: string, isHost: boolean): Player {
+    const newPlayer: Player = {
+      id: uuidv4(),
+      isHost,
+      nickname,
+      score: 0,
+      status: 'active'
+    }
+    return newPlayer;
+  }
+
 
   function handleUpdateCategories(categories: string[]) {
     setRoom((r: RoomState) => ({
