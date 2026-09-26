@@ -42,12 +42,26 @@
 
 **Alternatives considered**: Apenas testes unitários não detectariam divergências de sincronização; apenas E2E seria lento e menos preciso para regras matemáticas.
 
+## Decision: Validação sequencial categoria por categoria com placar incremental
+
+**Rationale**: Apresentar todos os termos de uma categoria por vez para avaliação concentra a atenção de todos os participantes no mesmo tema, facilitando a identificação de repetições ou termos inválidos. Conforme cada categoria é votada (ou o tempo esgota), a pontuação é imediatamente calculada e somada no placar exibido na lateral direita, oferecendo feedback instantâneo e dinamismo à partida antes de avançar para a próxima categoria.
+
+**Alternatives considered**: Avaliar todas as categorias em uma tela única tornaria a página muito extensa e dispersaria a atenção dos jogadores entre múltiplos temas ao mesmo tempo.
+
+## Decision: Foco da tela de configuração e celebração no pódio final
+
+**Rationale**: Na tela de configuração da sala, informações de lista de jogadores e placar não estão consolidadas e foram removidas para manter o foco exclusivamente na parametrização da partida. Na tela de resultado final, o placar é movido para o centro da tela em destaque, formatando o 1º, 2º e 3º colocados em formato de pódio olímpico e os demais em lista, garantindo a exibição do total de pontos conquistados em todas as posições para total transparência.
+
 ## Resolved Unknowns
 
 - Limite por sala: 20 jogadores.
-- Tempo da rodada: 20 segundos por categoria, totalizado.
-- Encerramento manual: qualquer jogador pode pressionar Stop.
-- Votacao: apenas invalidacao, ausencia equivale a concordancia, maximo de 30 segundos.
-- Persistencia: SQLite temporario em Durable Object; sem historico funcional apos encerramento.
+- Configuração da sala: apenas parâmetros de jogo (código, rodadas, categorias); sem lista de jogadores e sem placar.
+- Layout da rodada ativa: letra sorteada no lado direito acima do placar; botão Stop posicionado após as categorias.
+- Tempo da rodada: 20 segundos por categoria, totalizado; acionamento do botão Stop encerra a rodada imediatamente para todos.
+- Votação de invalidação: sequencial por tema (uma categoria por vez), apenas invalidação, ausência equivale a concordância.
+- Placar durante avaliação: mantido no lado direito, atualizado categoria por categoria em tempo real.
+- Resultado final: placar em destaque no centro, pódio para 1º, 2º e 3º, lista para 4º em diante, com total de pontos em todas as posições.
+- Persistência: SQLite temporário em Durable Object; sem histórico funcional após encerramento da sala.
 - Hospedagem: GitHub Pages para frontend e Cloudflare Workers para backend.
-- Limpeza: alarmes do Durable Object encerram salas expiradas; nao depender de TTL pago.
+- Limpeza: alarmes do Durable Object encerram salas expiradas.
+

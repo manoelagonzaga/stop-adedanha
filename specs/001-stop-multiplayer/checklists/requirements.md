@@ -31,5 +31,7 @@
 
 ## Notes
 
-- Checklist reviewed against the initial MVP specification on 2026-09-08.
-- The scoring rule, player limit, round timing behavior, automatic response validation, and player invalidation rules are defined in the specification. Detailed presentation and moderation behavior remain deferred to planning.
+- Checklist reviewed against the initial MVP specification on 2026-09-08 and updated on 2026-09-26.
+- The scoring rule, player limit, round timing behavior, automatic response validation, and player invalidation rules are defined in the specification.
+- Updated requirements include: omission of player list/scoreboard on the room configuration screen, placement of STOP button after categories, placement of drawn letter on the right above the scoreboard, sequential category-by-category validation with real-time sidebar score updates, and final results screen with centered podium (1st-3rd) and list view with total points on all positions.
+

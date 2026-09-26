@@ -31,19 +31,24 @@ For production, configure the GitHub Pages build with `VITE_API_URL=wss://<worke
 1. Open two browser windows.
 2. In window A, enter a nickname and create a room.
 3. Copy the room code and join from window B with a different nickname.
-4. Confirm both players see the same lobby and that a duplicate nickname is rejected.
-5. As host, select suggested categories, add a custom category, edit one and remove one.
-6. Set the number of rounds, start with at least two categories and confirm both windows receive the same round count, letter, categories and deadline.
-7. Submit answers from both windows. Confirm a second submission is rejected.
-8. Press Stop from one window and confirm both windows move to review immediately.
-9. In review, invalidate another player's answer from one window. Leave another answer without a vote and confirm omission counts as agreement.
-10. Confirm the voting phase ends when all eligible players vote or after 30 seconds.
-11. Verify base scores: 10 for valid unique, 5 for valid duplicate and 0 for empty/wrong initial letter.
-12. Verify invalidation thresholds at 0%, 10%, 50% and above 50%, including uniqueness and final ranking.
-13. Complete a match with multiple configured rounds and confirm it ends exactly after the configured final round.
-14. Navigate the complete flow with keyboard only and verify logical focus order, accessible status text, and no color-only meaning.
-15. Enable reduced motion in the browser and confirm letter-draw, Stop, and background animations are removed or simplified without losing information.
-16. Verify the scoreboard occupies a vertical desktop sidebar and moves below the game content on narrow screens without overlap.
+4. Confirm both players see the configuration screen without scoreboard and without player list.
+5. As host, select suggested categories, add a custom category, and set the number of rounds.
+6. Start the game and confirm on both windows:
+   - The drawn letter is on the right side, directly above the scoreboard section.
+   - The categories form is in the main area.
+   - The STOP button is located immediately after the categories section.
+7. Submit answers from both windows (or press Stop). Confirm pressing Stop ends answering immediately for all.
+8. Confirm the game enters sequential review, starting at Category 1, displaying all submitted terms for that theme.
+9. Vote on Category 1 terms. Confirm that when all vote (or timer expires), Category 1 score is computed and immediately reflected on the right-side scoreboard.
+10. Confirm automatic transition to Category 2, repeating the review and score update process until the final category of the round.
+11. If there are more rounds, advance to the next round with updated accumulated scores.
+12. At the end of the final round, confirm the Final Results screen:
+    - Scoreboard is prominently centered on the screen.
+    - 1st, 2nd, and 3rd place players are highlighted in podium format.
+    - Remaining players are displayed in a clean list format below the podium.
+    - All positions display the total points earned by each participant.
+13. Navigate the complete flow with keyboard only and verify logical focus order and accessible labels.
+14. Enable reduced motion and confirm letter-draw, Stop, category transitions, and podium animations are simplified or removed without losing information.
 
 ## Automated validation
 

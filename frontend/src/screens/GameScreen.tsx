@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { RoomState, Category, Player } from '../types';
-import { Scoreboard } from '../components/Scoreboard';
+import { useToast } from '../components/Toast';
+import { playStopSound } from '../utils/audio';
 
 interface GameScreenProps {
   room: RoomState;
@@ -9,245 +10,340 @@ interface GameScreenProps {
   onStop: (roundId: string) => void;
 }
 
-
 const LETTERS = [
-  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-  "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-] as const;
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'L', 'M',
+  'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V',
+];
 
-/**
- * Tela 3 — Rodada Ativa.
- * DOM order: round header → drawn letter (h2) → stop button → answers form → scoreboard (aside).
- */
-export function GameScreen({ room, myPlayerId: _myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
+export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
+  const { showToast } = useToast();
   const roundId = `round-${room.currentRound}`;
-  
-  console.log('user: ', _myPlayerId);
+  const me = room.players.find((p: Player) => p.id === myPlayerId);
+  const isHost = me?.isHost ?? false;
 
-  // Local answers keyed by categoryId
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [currentLetter, setCurrentLetter] = useState<string>(room.currentLetter || 'M');
+  const [timeLeft, setTimeLeft] = useState<number>(60);
+  const [isStopped, setIsStopped] = useState<boolean>(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Countdown state
-  const [announcedTime] = useState<string>('');
-  const announcedMilestonesRef = useRef<Set<number>>(new Set());
-
-  const [letter, setLetter] = useState<string>(() => generateLetter());
-  const [displayLetter, setDisplayLetter] = useState<string>(letter);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [isStopped, setIsStopped] = useState(false);
-
-  // Animate letter in
+  // Countdown timer
   useEffect(() => {
-    const nextLetter = generateLetter();
-    setLetter(nextLetter);
-    drawLetter(nextLetter);
-  }, [letter]);
+    if (isStopped || timeLeft <= 0) return;
 
-  // Reset answers when round changes
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleTriggerStop(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isStopped, timeLeft]);
+
+  // Keyboard shortcut: ENTER to trigger STOP
   useEffect(() => {
-    setAnswers({});
-    setSubmitted(false);
-    announcedMilestonesRef.current.clear();
-  }, [room.currentRound]);
-
-  function CountdownTimer( initialSeconds = room.categories.length * 20) {
-    const [timeLeft, setTimeLeft] = useState(initialSeconds);
-    
-    useEffect(() => {
-      if (isStopped) {
-        if (timeLeft <= 0) return;
-
-        const intervalId = setInterval(() => {
-          setTimeLeft((prevTime) => prevTime - 1);
-        }, 1000);
-
-        return () => clearInterval(intervalId);
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Enter' && !isStopped) {
+        // If not in a textarea
+        const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+        if (activeTag === 'input') {
+          e.preventDefault();
+          handleTriggerStop();
+        }
       }
-    }, [timeLeft, isStopped]);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isStopped, answers]);
 
-    const formatTime = (seconds: number) => {
-      const minutes = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    };
-
-    return (
-      <div>
-        <h2>{formatTime(timeLeft)}</h2>
-        {timeLeft === 0 && <p>O tempo acabou!</p>}
-      </div>
-    );
-    
+  function handleInputChange(categoryId: string, value: string) {
+    setAnswers((prev) => ({
+      ...prev,
+      [categoryId]: value.toUpperCase(),
+    }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (submitted) return;
-    setSubmitted(true);
+  function handleRerollLetter() {
+    if (!isHost) return;
+    const available = LETTERS.filter((l) => l !== currentLetter);
+    const pick = available[Math.floor(Math.random() * available.length)] || 'S';
+    setCurrentLetter(pick);
+    showToast(`Nova letra sorteada: ${pick}!`);
+  }
+
+  function handleTriggerStop(timeExpired = false) {
+    if (isStopped) return;
+    setIsStopped(true);
+    playStopSound();
+
+    if (timeExpired) {
+      showToast('Tempo esgotado! Congelando rodada...');
+    } else {
+      showToast('🛑 VOCÊ BATEU STOP! Congelando rodada...');
+    }
+
     onSubmitAnswers(roundId, answers);
+    setTimeout(() => {
+      onStop(roundId);
+    }, 900);
   }
 
-  function handleStop() {
-    formRef.current?.requestSubmit();
-    onStop(roundId);
-  }
+  const filledCount = Object.values(answers).filter((val) => val && val.trim().length > 0).length;
+  const totalCategories = room.categories.length;
+  const progressPercent = totalCategories > 0 ? Math.round((filledCount / totalCategories) * 100) : 0;
 
-  function generateLetter(): string {
-    return LETTERS[Math.floor(Math.random() * LETTERS.length)] ?? "A";
-  }
+  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const seconds = (timeLeft % 60).toString().padStart(2, '0');
 
-  function drawLetter(finalLetter: string) {
-    setIsDrawing(true);
-    let steps = 0;
-    const maxSteps = 22;
-    const interval = setInterval(() => {
-      steps = steps + 1;
-      setDisplayLetter(LETTERS[Math.floor(Math.random() * LETTERS.length)] ?? finalLetter);
-      if (steps >= maxSteps) {
-        setIsStopped(true);
-        setDisplayLetter(finalLetter);
-        setIsDrawing(false);
-        clearInterval(interval);
-      }
-    }, 70);
-  }
-
+  // Sorted players for live classification
+  const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="flex min-h-svh flex-col lg:grid lg:grid-cols-[1fr_3fr_1fr] gap-4 px-4 py-8 lg:px-8">
-
-      {/* Round header card */}
-      <div className="flex flex-col gap-5 rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
-      <div>
-
-
-        <span className="text-base font-bold tracking-widest text-navy uppercase">Letra sorteada</span>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-400 font-medium tracking-wide">
-              Round {room.currentRound}/{room.totalRounds}
-            </span>
+    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+      {/* Barra Superior da Rodada */}
+      <div className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm md:flex-row md:p-6">
+        {/* Info da Rodada */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 font-black text-xl text-indigo-600">
+            {room.currentRound}/{room.totalRounds}
           </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-800">
+                Rodada Ativa
+              </span>
+              <span className="text-xs text-slate-400">Sala Privada #{room.code}</span>
+            </div>
+            <h1 className="text-xl font-black text-slate-900 md:text-2xl">
+              Rodada {room.currentRound} de {room.totalRounds}
+            </h1>
           </div>
-
-        {/* Drawn letter — animated, announced immediately */}
-        <div className="grid place-items-center">
-          <span
-            key={displayLetter + (isDrawing ? "-draw" : "-lock")}
-            className={`mt-4 text-center text-9xl font-extrabold text-orange transition-all duration-300 ${isDrawing ? "animate-letter-shuffle" : "animate-letter-lock"}`}
-            aria-label={`Letra sorteada: ${letter}`}
-            aria-live="assertive"
-            aria-atomic="true"
-          >
-            {displayLetter}
-          </span>
         </div>
 
+        {/* Cronômetro Decrescente */}
+        <div className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${
+          timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
+        }`}>
+          <div className="relative flex h-10 w-10 items-center justify-center">
+            <span className={`material-symbols-outlined text-2xl ${
+              timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
+            }`}>
+              timelapse
+            </span>
+          </div>
+          <div>
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Tempo Restante
+            </span>
+            <span className={`text-2xl font-black tracking-tight ${
+              timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
+            }`}>
+              {minutes}:{seconds}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Timer — visible display */}
-      <div aria-hidden="true" className="text-center">
-        <span className="text-3xl font-extrabold tabular-nums text-navy">
-          {CountdownTimer()}
-        </span>
-        <p className="text-xs text-gray-400">
-          {room.players.filter((p: Player) => p.status === 'active').length} jogando
-        </p>
-      </div>
-      </div>
-
-      {/* ── Main game area ── */}
-      <main className="flex flex-col gap-5">
-
-        {/* Answers form */}
-        <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-800 uppercase">Categorias</h3>
-            <span className="text-xs text-gray-400">
-              {Object.values(answers).filter(Boolean).length}/{room.categories.length}
+      {/* Grid Principal: 2 Colunas */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Coluna Esquerda: Digitação das Categorias + BOTÃO STOP APÓS AS CATEGORIAS */}
+        <div className="space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+              <span className="material-symbols-outlined text-indigo-600">edit_note</span>
+              Preencha com a Letra{' '}
+              <span className="font-black text-xl text-indigo-600">{currentLetter}</span>
+            </h2>
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+              {filledCount} de {totalCategories} Preenchidas
             </span>
           </div>
 
-          <form id="answers-form" ref={formRef}  onSubmit={handleSubmit}>
-            <ul className="flex flex-col gap-3" aria-label="Formulário de respostas">
-              {room.categories.map((cat: Category) => (
-                <li key={cat.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  {/* Category pill */}
-                  <span
-                    aria-hidden="true"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-xs font-bold text-white"
-                  >
-                    {cat.name[0].toUpperCase()}
+          {/* Lista de Campos das Categorias */}
+          <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="space-y-3">
+            {room.categories.map((cat: Category, index: number) => {
+              const val = answers[cat.id] || '';
+              const isFilled = val.trim().length > 0;
+              const startsWithLetter = val.trim().startsWith(currentLetter);
+
+              return (
+                <div
+                  key={cat.id}
+                  className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${
+                    isFilled
+                      ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
+                      : 'border-indigo-100 bg-white hover:border-slate-300'
+                  } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
+                    {index + 1}
                   </span>
-                  <label htmlFor={`answer-${cat.id}`} className="w-28 shrink-0 text-sm font-semibold text-gray-700">
+                  <span className="w-28 shrink-0 truncate text-sm font-bold text-slate-800">
                     {cat.name}
-                  </label>
+                  </span>
                   <input
-                    id={`answer-${cat.id}`}
                     type="text"
-                    value={answers[cat.id] ?? ''}
-                    onChange={(e) => setAnswers((prev) => ({ ...prev, [cat.id]: e.target.value }))}
-                    disabled={submitted}
-                    placeholder="Sua resposta…"
+                    value={val}
+                    onChange={(e) => handleInputChange(cat.id, e.target.value)}
+                    placeholder={`Ex com ${currentLetter}...`}
+                    disabled={isStopped}
                     autoComplete="off"
-                    className={[
-                      'flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400',
-                      'outline-none transition focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/20',
-                      submitted ? 'opacity-50 cursor-not-allowed' : '',
-                    ].join(' ')}
+                    className="game-field flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300"
                   />
-                </li>
-              ))}
-            </ul>
-
-            {/* {!submitted && (
-              <button
-                type="submit"
-                form="answers-form"
-                className="mt-5 w-full rounded-xl border-2 border-navy py-3 text-sm font-bold text-navy
-                           hover:bg-navy hover:text-white active:scale-[0.98] transition-all
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy"
-              >
-                Enviar respostas
-              </button>
-            )} */}
-            {submitted && (
-              <p role="status" aria-live="polite" className="mt-4 text-center text-sm font-semibold text-gray-500">
-                ✓ Respostas enviadas — aguardando os outros jogadores…
-              </p>
-            )}
+                  {isFilled ? (
+                    <span
+                      className={`material-symbols-outlined text-lg ${
+                        startsWithLetter ? 'text-emerald-500' : 'text-amber-500'
+                      }`}
+                      title={startsWithLetter ? 'Inicia com a letra sorteada' : 'Atenção: não inicia com a letra sorteada'}
+                    >
+                      check_circle
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-slate-300">TAB ⇥</span>
+                  )}
+                </div>
+              );
+            })}
           </form>
-        </section>
 
-        {/* STOP button */}
-        {!submitted && (
-          <button
-            type="button"
-            onClick={handleStop}
-            className="w-full rounded-2xl bg-navy py-4 text-lg font-extrabold uppercase tracking-widest text-white
-                       hover:bg-navy/90 active:scale-[0.97] transition-all
-                       focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange focus-visible:ring-offset-2"
-            aria-label="Parar o jogo — encerra a rodada para todos os jogadores"
-          >
-            Stop<span className="text-orange">!</span>
-          </button>
-        )}
+          {/* BOTÃO GIGANTE DE STOP — Posicionado após a sessão de categorias */}
+          <div className="mt-6 flex flex-col items-center justify-between gap-4 rounded-3xl border-2 border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 p-5 sm:flex-row">
+            <div>
+              <div className="flex items-center gap-1.5 text-sm font-black text-rose-600">
+                <span className="material-symbols-outlined text-lg">bolt</span>
+                COMPLETOU TUDO OU QUER ARRISCAR?
+              </div>
+              <p className="mt-0.5 text-xs text-slate-600">
+                Ao bater no STOP, o cronômetro trava na hora para todos os outros jogadores!
+              </p>
+            </div>
 
-        {/* Timer live region — only announces at milestones, non-intrusive */}
-        <div role="timer" aria-live="polite" aria-atomic="true" className="sr-only">
-          {announcedTime}
+            <button
+              type="button"
+              onClick={() => handleTriggerStop()}
+              disabled={isStopped}
+              className="animate-stop-btn flex items-center gap-3 rounded-2xl bg-rose-600 px-8 py-4 text-xl font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-3xl">pan_tool</span>
+              Gritar STOP!
+            </button>
+          </div>
         </div>
-      </main>
 
-      {/* ── Sidebar Scoreboard — last in DOM ── */}
-      <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-5 py-5">
-        <Scoreboard
-          players={room.players}
-          currentRound={room.currentRound}
-          totalRounds={room.totalRounds}
-        />
+        {/* Coluna Direita: Letra Sorteada no Topo + Placar ao Vivo Abaixo */}
+        <div className="space-y-4">
+          {/* 1) Card da Letra Sorteada no Lado Direito */}
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-purple-50 to-indigo-50 p-6 text-center shadow-sm">
+            <span className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              Letra Sorteada da Vez
+            </span>
+            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-600 font-black text-5xl text-white shadow-xl shadow-indigo-300">
+              {currentLetter}
+            </div>
+            <p className="mt-2 text-xs font-medium text-slate-500">
+              Preencha todas as categorias iniciando com a letra <strong>{currentLetter}</strong>
+            </p>
+            {isHost && (
+              <button
+                type="button"
+                onClick={handleRerollLetter}
+                className="mt-3 flex items-center gap-1 text-xs font-bold text-indigo-600 underline hover:text-indigo-800"
+              >
+                <span className="material-symbols-outlined text-sm">casino</span>
+                Sortear outra letra
+              </button>
+            )}
+          </div>
+
+          {/* 2) Placar / Classificação ao Vivo */}
+          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <span className="material-symbols-outlined text-amber-500">leaderboard</span>
+                Classificação ao Vivo
+              </h3>
+              <span className="text-xs text-slate-400">Rodada {room.currentRound}</span>
+            </div>
+
+            {/* Progresso dos Jogadores */}
+            <div className="mt-4 space-y-3">
+              {sortedPlayers.map((player, index) => {
+                const isMe = player.id === myPlayerId;
+                // Compute progress: For current player, use real filledCount; for others, simulate active progress
+                const playerProgress = isMe
+                  ? progressPercent
+                  : Math.min(100, Math.max(25, 80 - index * 18));
+                const playerFilled = isMe
+                  ? filledCount
+                  : Math.min(totalCategories, Math.max(1, totalCategories - index));
+
+                return (
+                  <div
+                    key={player.id}
+                    className={`rounded-xl p-3 transition ${
+                      isMe
+                        ? 'border border-indigo-200 bg-indigo-50/70'
+                        : 'border border-slate-100 bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{isMe ? '🦊' : '🐙'}</span>
+                        <span className={isMe ? 'text-indigo-900' : 'text-slate-800'}>
+                          {player.nickname} {isMe && '(Você)'}
+                        </span>
+                      </div>
+                      <span className={isMe ? 'text-indigo-600' : 'text-slate-600'}>
+                        {player.score} pts
+                      </span>
+                    </div>
+
+                    {/* Barra de progresso do preenchimento */}
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isMe ? 'bg-indigo-600' : index === 0 ? 'bg-amber-500' : 'bg-slate-400'
+                        }`}
+                        style={{ width: `${playerProgress}%` }}
+                      />
+                    </div>
+
+                    <div className="mt-1 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                      <span>
+                        {playerFilled} de {totalCategories} preenchidos
+                      </span>
+                      <span className={isMe ? 'text-indigo-700' : 'text-slate-500'}>
+                        {index + 1}º Lugar
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dicas de Teclado */}
+            <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1 font-bold">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-700">
+                  TAB
+                </span>{' '}
+                Próximo
+              </span>
+              <span className="flex items-center gap-1 font-bold">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-700">
+                  ENTER
+                </span>{' '}
+                STOP!
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

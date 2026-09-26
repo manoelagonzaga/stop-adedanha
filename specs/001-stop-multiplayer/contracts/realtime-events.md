@@ -2,7 +2,7 @@
 
 Transport: Cloudflare Worker TypeScript com WebSocket e Durable Object por sala. O frontend do GitHub Pages usa `wss://` em produção.
 
-Os comandos sao mensagens JSON sobre WebSocket. O Durable Object serializa comandos, valida identidade temporaria, autoria, host, fase e capacidade, persiste em SQLite e transmite snapshots aos sockets da sala.
+Os comandos são mensagens JSON sobre WebSocket. O Durable Object serializa comandos, valida identidade temporária, autoria, host, fase e capacidade, persiste em SQLite e transmite snapshots aos sockets da sala.
 
 ## Client to server
 
@@ -52,33 +52,85 @@ Uma resposta por jogador e categoria. O Durable Object usa seu próprio relógio
 {"requestId":"r6","roundId":"round-1"}
 ```
 
-Qualquer jogador ativo pode solicitar. O primeiro comando serializado pelo serviço de sala move a rodada para review.
+Qualquer jogador ativo pode solicitar através do botão Stop (posicionado após as categorias na UI). O primeiro comando serializado encerra a rodada e inicia a fase de avaliação pela Categoria 1.
 
 ### `answer:invalidate`
 
 ```json
-{"requestId":"r7","roundId":"round-1","answerId":"answer-1"}
+{"requestId":"r7","roundId":"round-1","categoryId":"cat-1","answerId":"p2-cat-1"}
 ```
 
-Registra somente invalidação. O autor é rejeitado. O mesmo requestId é idempotente.
+Registra voto de invalidação para um termo da categoria ativa. O autor do termo é rejeitado. O mesmo requestId é idempotente.
 
 ## Server to client
 
 ### `room:state`
 
-Snapshot autoritativo de lobby/jogo com código, jogadores, host, categorias, fase e metadados da rodada. Nunca expõe rascunhos privados antes de review.
+Snapshot autoritativo de lobby/jogo com código, fase e metadados. Na tela de configuração da sala (`lobby`), o placar e a lista de jogadores não são exibidos aos participantes.
 
 ### `round:started`
 
-Inclui id, letra, categorias ordenadas e deadline absoluto.
+Inclui id da rodada, letra sorteada (exibida no topo direito acima do placar), categorias ordenadas e deadline absoluto de respostas.
 
-### `round:review`
+### `round:review:category`
 
-Inclui respostas enviadas, validade automatica, invalidacoes, quantidade de elegiveis e deadline de 30 segundos.
+Enviado sequencialmente para cada tema da rodada:
+```json
+{
+  "type": "round:review:category",
+  "categoryIndex": 0,
+  "totalCategories": 5,
+  "category": { "id": "cat-1", "name": "Animais" },
+  "answers": [
+    { "playerId": "p1", "text": "Arara", "automaticValidity": "valid", "invalidations": [] },
+    { "playerId": "p2", "text": "Aranha", "automaticValidity": "valid", "invalidations": [] }
+  ],
+  "eligibleVoters": 2,
+  "deadline": 1727360000000
+}
+```
+
+Apresenta todos os termos inseridos pelos jogadores para a categoria em avaliação.
+
+### `round:review:score_update`
+
+Transmitido imediatamente após todos os jogadores votarem na categoria atual ou o tempo limite da categoria expirar:
+```json
+{
+  "type": "round:review:score_update",
+  "categoryIndex": 0,
+  "categoryScores": { "p1": 10, "p2": 10 },
+  "scoreboard": [
+    { "playerId": "p1", "nickname": "Ana", "score": 10 },
+    { "playerId": "p2", "nickname": "Bia", "score": 10 }
+  ]
+}
+```
+
+Atualiza a seção de placar no lado direito da tela com a pontuação já apurada até o momento.
 
 ### `round:results`
 
-Inclui pontuacao base/final, razoes de invalidacao, acumulados e ranking com empates.
+Disparado após a avaliação de todas as categorias da rodada intermediária, contendo resumo das pontuações da rodada e placar geral.
+
+### `game:final_results`
+
+Disparado após a conclusão de todas as categorias da última rodada da partida:
+```json
+{
+  "type": "game:final_results",
+  "podium": [
+    { "position": 1, "playerId": "p1", "nickname": "Ana", "score": 120, "tier": "gold" },
+    { "position": 2, "playerId": "p2", "nickname": "Bia", "score": 95, "tier": "silver" },
+    { "position": 3, "playerId": "p3", "nickname": "Carlos", "score": 80, "tier": "bronze" }
+  ],
+  "list": [
+    { "position": 4, "playerId": "p4", "nickname": "Diego", "score": 60 }
+  ]
+}
+```
+
+Apresenta o placar centralizado com pódio (1º, 2º e 3º) e lista (demais participantes), com pontuações totais em todas as posições.
 
 ### `player:presence`
 
@@ -90,12 +142,12 @@ Inclui id, nickname e estado active/disconnected.
 {"code":"ROUND_CLOSED","message":"A rodada ja foi encerrada."}
 ```
 
-Known codes incluem `INVALID_NICKNAME`, `ROOM_NOT_FOUND`, `ROOM_FULL`, `DUPLICATE_NICKNAME`, `NOT_HOST`, `INVALID_PHASE`, `INVALID_CATEGORY_LIST`, `ANSWER_NOT_FOUND`, `CANNOT_INVALIDATE_OWN_ANSWER` e `ROUND_CLOSED`.
-
 ## Contract invariants
 
 - O backend controla o relógio; clientes exibem countdowns a partir de deadlines enviados pelo servidor.
-- `round:results` só é considerado final após todos os elegíveis votarem ou o deadline de 30 segundos passar.
-- Resposta automaticamente invalida tem score zero e nao se torna valida por ausencia de invalidacao.
-- Unicidade e calculada entre respostas automaticamente validas antes das penalidades.
-- Comandos críticos usam serialização do serviço de sala e `requestId` para permitir retry sem duplicar jogador, resposta ou invalidação.
+- Na tela de configuração da sala, o placar e a lista de jogadores não são renderizados.
+- Na tela de jogo, a letra sorteada fica no lado direito acima do placar, e o botão Stop após as categorias.
+- A validação ocorre sequencialmente tema a tema. A cada categoria finalizada, o placar lateral direito é atualizado com o valor já apurado.
+- O autor não pode invalidar sua própria resposta; ausência de voto é tratada como concordância.
+- Ao final da partida, o resultado final exibe o placar centralizado com pódio (1º a 3º) e lista (4º em diante), com pontuações em todas as posições.
+

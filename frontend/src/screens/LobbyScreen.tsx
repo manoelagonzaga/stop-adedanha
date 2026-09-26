@@ -1,22 +1,6 @@
 import { useState } from 'react';
 import type { RoomState, Category, Player } from '../types';
-
-const SUGGESTED_CATEGORIES = [
-  'Nome',
-  'Comidas',
-  'Cor',
-  'Animais',
-  'Objeto',
-  'Lugares',
-  'Famosos',
-  'Marcas',
-  'Filmes',
-  'Músicas', 
-  'Esportes',
-  'Profissões',
-  'Super-heróis',
-  'Minha sogra é'
-];
+import { useToast } from '../components/Toast';
 
 interface LobbyScreenProps {
   room: RoomState;
@@ -27,289 +11,383 @@ interface LobbyScreenProps {
   statusMessage?: string | null;
 }
 
-/**
- * Tela 2 — Sala de Espera e Configuração.
- * DOM order: heading → rounds → categories → players list → start button → scoreboard.
- * Host controls are editable; guest controls are read-only.
- */
+const CATEGORY_PACKS = {
+  classico: ['Nome', 'CEP / Lugar', 'Animal', 'Cor', 'Fruta / Comida', 'Objeto', 'Marca'],
+  geek: ['Personagem Pop', 'Filme / Série', 'Jogo / Game', 'Poder / Magia', 'Vilão Fictício', 'Item Geek'],
+  expert: ['País ou Capital', 'Profissão Rara', 'Instrumento Musical', 'Termo Científico', 'Obra de Arte', 'Comida Típica'],
+};
+
+const ALL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const HARD_LETTERS = ['K', 'W', 'Y', 'X', 'Z'];
+
 export function LobbyScreen({
   room,
   myPlayerId,
   onUpdateCategories,
   onUpdateRounds,
   onStartGame,
-  statusMessage,
 }: LobbyScreenProps) {
+  const { showToast } = useToast();
   const me = room.players.find((p: Player) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
 
-  const [newCategory, setNewCategory] = useState('');
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [roundTime, setRoundTime] = useState<number>(60);
+  const [excludedLetters, setExcludedLetters] = useState<string[]>([]);
+  const [hardLettersBlocked, setHardLettersBlocked] = useState(false);
 
   const categoryNames = room.categories.map((c: Category) => c.name);
 
-  function handleAddCategory() {
-    const trimmed = newCategory.trim();
-    if (!trimmed || categoryNames.includes(trimmed)) return;
+  function handleSelectRounds(rounds: number) {
+    if (!isHost) return;
+    onUpdateRounds(rounds);
+    showToast(`Partida configurada para ${rounds} rodadas.`);
+  }
+
+  function handleSelectTime(seconds: number) {
+    if (!isHost) return;
+    setRoundTime(seconds);
+    showToast(seconds === 0 ? 'Tempo por rodada: Sem limite' : `Tempo por rodada: ${seconds} segundos`);
+  }
+
+  function handleLoadPack(packName: keyof typeof CATEGORY_PACKS) {
+    if (!isHost) return;
+    const pack = CATEGORY_PACKS[packName];
+    onUpdateCategories(pack);
+    showToast(`Pacote ${packName.toUpperCase()} carregado!`);
+  }
+
+  function handleAddCustomCategory() {
+    if (!isHost) return;
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    if (categoryNames.map(c => c.toLowerCase()).includes(trimmed.toLowerCase())) {
+      showToast('Esta categoria já está adicionada.');
+      return;
+    }
     onUpdateCategories([...categoryNames, trimmed]);
-    setNewCategory('');
+    setNewCategoryInput('');
+    showToast(`Categoria "${trimmed}" adicionada!`);
   }
 
-  function handleRemoveCategory(cat: Category) {
-    onUpdateCategories(categoryNames.filter((n: string) => n !== cat.name));
+  function handleRemoveCategory(nameToRemove: string) {
+    if (!isHost) return;
+    if (categoryNames.length <= 4) {
+      showToast('Mantenha pelo menos 4 categorias para uma partida dinâmica.');
+      return;
+    }
+    onUpdateCategories(categoryNames.filter((n) => n !== nameToRemove));
+    showToast(`Categoria "${nameToRemove}" removida.`);
   }
 
-  function handleSuggest(name: string) {
-    if (categoryNames.includes(name)) return;
-    onUpdateCategories([...categoryNames, name]);
+  function handleToggleHardLetters() {
+    if (!isHost) return;
+    if (!hardLettersBlocked) {
+      setExcludedLetters((prev) => Array.from(new Set([...prev, ...HARD_LETTERS])));
+      setHardLettersBlocked(true);
+      showToast('Letras difíceis bloqueadas (K, W, Y, X, Z)!');
+    } else {
+      setExcludedLetters((prev) => prev.filter((l) => !HARD_LETTERS.includes(l)));
+      setHardLettersBlocked(false);
+      showToast('Todas as letras liberadas para sorteio!');
+    }
   }
 
-  function handleRoundsChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = Math.max(1, Math.min(10, Number(e.target.value)));
-    onUpdateRounds(val);
+  function handleToggleLetter(letter: string) {
+    if (!isHost) return;
+    setExcludedLetters((prev) =>
+      prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter]
+    );
   }
 
-  const canStart = isHost && room.categories.length > 0 && room.players.length >= 1;
+  function handleCopyLink() {
+    navigator.clipboard?.writeText(window.location.href);
+    showToast('Link da sala copiado para a área de transferência!');
+  }
 
   return (
-    <div>
-      <div className="flex flex-col gap-5 px-4 py-8 pb-2.5 lg:px-8 lg:grid lg:grid-cols-[1fr_25%]">
-        <div className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5">
-          <h1 className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase mb-0.5">Configuração da Sala</h1>
-          <span className="text-2xl font-extrabold text-navy tracking-widest">Bem-vindo, {me?.nickname}</span>
-        </div>
-
-        {/* Room header */}
-        <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5 flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase mb-3">Sala</h2>
-            <span className="text-2xl font-extrabold text-navy tracking-widest">{room.code}</span>
-          </div>
-          <div className="absolute top-4.5 right-6 flex items-center gap-2">
-            <span
-              className={[
-                'rounded-full px-3 py-1 text-xs font-semibold tracking-wide',
-                isHost ? 'bg-orange/15 text-orange' : 'bg-gray-100 text-gray-500',
-              ].join(' ')}
-              aria-label={isHost ? 'Você é o anfitrião desta sala' : 'Você é um convidado'}
-            >
-              {isHost ? 'Anfitrião' : 'Convidado'}
+    <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
+      {/* Topo do Lobby */}
+      <div className="flex flex-col items-start justify-between gap-4 border-b border-indigo-100 pb-6 sm:flex-row sm:items-center">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
+              <span className="material-symbols-outlined fill text-xs">star</span>
+              {isHost ? 'VOCÊ É O HOST' : 'CONVIDADO'}
+            </span>
+            <span className="text-xs text-slate-400">•</span>
+            <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Salvo em tempo real
             </span>
           </div>
-          </section>
-      </div>
-      <div className="flex min-h-svh flex-col lg:grid lg:grid-cols-[1fr_25%] gap-5 pt-2.5 px-4 py-8 lg:px-8">
-        {/* ── Main area ── */}
-        <main className="flex flex-col gap-5">
-          {/* Categories */}
-          <section
-            className="  rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5"
-            aria-labelledby="categories-heading"
+          <h1 className="mt-1 text-2xl font-black text-slate-900 md:text-3xl">
+            Sala Privada: <span className="text-indigo-600">#{room.code}</span>
+          </h1>
+          <p className="text-xs text-slate-500 md:text-sm">
+            Personalize as rodadas, categorias e letras antes de iniciar a partida.
+          </p>
+        </div>
+
+        {/* Botões de Ação do Topo */}
+        <div className="flex w-full items-center gap-2.5 sm:w-auto">
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
-            <div className="flex items-center justify-between mb-3">
-              <h2
-                id="categories-heading"
-                className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase"
-              >
-                Categorias
-              </h2>
-              <span className="text-xs text-gray-400">{room.categories.length} selecionada(s)</span>
-            </div>
-
-            {/* Active category list */}
-            <ul
-              className="mb-4 flex flex-col gap-2"
-              aria-label="Categorias da partida"
-            >
-              {room.categories.length === 0 && (
-                <li className="text-sm text-gray-400 py-2">Nenhuma categoria adicionada ainda.</li>
-              )}
-              {room.categories.map((cat: Category) => (
-                <li
-                  key={cat.id}
-                  className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-navy text-xs font-bold text-white shrink-0"
-                    >
-                      {cat.name[0].toUpperCase()}
-                    </span>
-                    <span className="text-sm font-medium text-gray-700">{cat.name}</span>
-                  </div>
-                  {isHost && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCategory(cat)}
-                      aria-label={`Remover categoria ${cat.name}`}
-                      className="rounded-lg px-2 py-1 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                    >
-                      Remover
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-
-            {/* Add custom category (host only) */}
-            {isHost && (
-              <div className="mb-4 flex gap-2">
-                <label
-                  htmlFor="new-category"
-                  className="sr-only"
-                >
-                  Nova categoria
-                </label>
-                <input
-                  id="new-category"
-                  type="text"
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}
-                  placeholder="Adicionar categoria…"
-                  maxLength={32}
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400
-                            outline-none transition focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/20"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddCategory}
-                  className="rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy/90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy"
-                >
-                  Adicionar
-                </button>
-              </div>
-            )}
-
-            {/* Suggestions (host only) */}
-            {isHost && (
-              <div>
-                <p className="mb-2 text-xs text-gray-400 font-medium">Sugestões:</p>
-                <div
-                  className="flex flex-wrap gap-2"
-                  role="list"
-                  aria-label="Categorias sugeridas"
-                >
-                  {SUGGESTED_CATEGORIES.filter((s) => !categoryNames.includes(s)).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => handleSuggest(s)}
-                      role="listitem"
-                      className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600
-                                hover:border-navy/40 hover:text-navy hover:bg-navy/5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Players */}
-          <section className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5" aria-labelledby="players-heading">
-            <h3 id="players-heading" className="mb-3 text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
-              Jogadores ({room.players.length}/20)
-            </h3>
-            <ul className="flex flex-col gap-2" aria-label="Lista de jogadores na sala">
-              {room.players.map((player: Player) => (
-                <li key={player.id} className="flex items-center gap-3">
-                  <span
-                    aria-hidden="true"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-xs font-bold text-white"
-                  >
-                    {player.nickname[0].toUpperCase()}
-                  </span>
-                  <span className="text-sm text-gray-700 font-medium">
-                    {player.nickname}
-                    {player.id === myPlayerId && (
-                      <span className="ml-1 text-gray-400 font-normal">(você)</span>
-                    )}
-                    {player.isHost && (
-                      <span className="ml-1 text-xs text-orange font-semibold">★</span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          
-
-          {/* Status announcements for screen readers */}
-          <div
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            className="sr-only "
-          >
-            {statusMessage ?? ''}
-          </div>
-          
-
-        </main>
-
-          <div className="flex flex-col gap-5">
-          {/* Number of rounds */}
-          <section
-            className="rounded-2xl bg-white/90 shadow-md backdrop-blur-sm px-6 py-5 "
-            aria-labelledby="rounds-heading"
-          >
-            <h2
-              id="rounds-heading"
-              className="mb-3 text-xs font-bold tracking-[0.2em] text-gray-400 uppercase"
-            >
-              Rodadas
-            </h2>
-            <div className="flex items-center gap-4">
-              <label
-                htmlFor="total-rounds"
-                className="text-sm font-semibold text-gray-700"
-              >
-                Quantidade
-              </label>
-              <input
-                id="total-rounds"
-                type="number"
-                min={1}
-                max={10}
-                value={room.totalRounds || 3}
-                onChange={handleRoundsChange}
-                readOnly={!isHost}
-                aria-readonly={!isHost}
-                className={[
-                  'w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-bold text-navy',
-                  'outline-none transition focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/20',
-                  !isHost ? 'bg-gray-50 cursor-not-allowed text-gray-400' : 'bg-white',
-                ].join(' ')}
-              />
-            </div>
-          </section>
-
-          {/* Start game (host only) */}
-          {isHost && (
+            <span className="material-symbols-outlined text-lg">link</span>
+            Copiar Link da Sala
+          </button>
+          {isHost ? (
             <button
               type="button"
               onClick={onStartGame}
-              disabled={!canStart}
-              className="w-full rounded-2xl bg-navy py-4 text-base font-bold text-white tracking-wide
-                          hover:bg-navy/90 active:scale-[0.98] transition-all
-                          disabled:opacity-40 disabled:cursor-not-allowed
-                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 active:scale-95 sm:flex-initial"
             >
-              Iniciar jogo
+              <span className="material-symbols-outlined text-lg">play_arrow</span>
+              Iniciar Partida
             </button>
+          ) : (
+            <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-500">
+              Aguardando o host iniciar…
+            </span>
           )}
-          {!isHost && (
-            <p
-              className="text-center text-sm text-gray-400"
-              aria-live="polite"
-            >
-              Aguardando o anfitrião iniciar a partida…
-            </p>
+        </div>
+      </div>
+
+      {/* Grid Principal das Configurações — Sem placar nem lista de jogadores nesta fase */}
+      <div className="mt-6 space-y-6">
+        {/* Card 1: Estrutura da Partida (Rodadas + Tempo) */}
+        <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <span className="material-symbols-outlined text-lg">tune</span>
+              </span>
+              <h2 className="text-lg font-bold text-slate-800">Regras & Estrutura da Partida</h2>
+            </div>
+            <span className="text-xs font-medium text-slate-400">Ajuste o ritmo do jogo</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            {/* Número de Rodadas */}
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Número de Rodadas
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[3, 5, 8, 10].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    disabled={!isHost}
+                    onClick={() => handleSelectRounds(count)}
+                    className={`py-2 rounded-xl text-sm font-bold transition ${
+                      room.totalRounds === count
+                        ? 'border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm'
+                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tempo por Rodada */}
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Tempo por Rodada
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: '60s', value: 60 },
+                  { label: '90s', value: 90 },
+                  { label: '120s', value: 120 },
+                  { label: 'Sem Fim', value: 0 },
+                ].map(({ label, value }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={!isHost}
+                    onClick={() => handleSelectTime(value)}
+                    className={`py-2 rounded-xl text-sm font-bold transition ${
+                      roundTime === value
+                        ? 'border-2 border-rose-500 bg-rose-500 text-white shadow-sm'
+                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-rose-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Categorias da Partida */}
+        <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
+          <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <span className="material-symbols-outlined text-lg">category</span>
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Categorias da Partida</h2>
+                <p className="text-xs text-slate-500">
+                  Mínimo de 4 para um jogo dinâmico. Adicione ou remova categorias livremente.
+                </p>
+              </div>
+            </div>
+            {isHost && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="font-medium text-slate-400">Packs:</span>
+                <button
+                  type="button"
+                  onClick={() => handleLoadPack('classico')}
+                  className="rounded-lg bg-indigo-50 px-2.5 py-1 font-bold text-indigo-700 transition hover:bg-indigo-100"
+                >
+                  Clássico
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLoadPack('geek')}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-700 transition hover:bg-slate-200"
+                >
+                  Geek/Pop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLoadPack('expert')}
+                  className="rounded-lg bg-rose-50 px-2.5 py-1 font-bold text-rose-700 transition hover:bg-rose-100"
+                >
+                  Expert 🌶️
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Tags das Categorias Ativas */}
+          <div className="my-4 flex flex-wrap gap-2.5">
+            {categoryNames.map((cat, index) => (
+              <div
+                key={cat}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-100"
+              >
+                <span className="font-extrabold text-indigo-600">
+                  {(index + 1).toString().padStart(2, '0')}
+                </span>
+                <span>{cat}</span>
+                {isHost && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCategory(cat)}
+                    className="ml-1 text-slate-400 hover:text-rose-500 focus:outline-none"
+                    title={`Remover ${cat}`}
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Adicionar Nova Categoria */}
+          {isHost && (
+            <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
+              <input
+                type="text"
+                value={newCategoryInput}
+                onChange={(e) => setNewCategoryInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCustomCategory();
+                  }
+                }}
+                placeholder="Criar categoria personalizada (ex: Vilão de Anime, Sobremesa)..."
+                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomCategory}
+                className="flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700"
+              >
+                <span className="material-symbols-outlined text-base">add</span>
+                Adicionar
+              </button>
+            </div>
           )}
         </div>
 
+        {/* Card 3: Letras Permitidas */}
+        <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
+          <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <span className="material-symbols-outlined text-lg">font_download</span>
+              </span>
+              <h2 className="text-lg font-bold text-slate-800">Letras Permitidas na Partida</h2>
+            </div>
+            {isHost && (
+              <button
+                type="button"
+                onClick={handleToggleHardLetters}
+                className="flex items-center gap-1 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+              >
+                <span className="material-symbols-outlined text-sm">filter_alt</span>
+                {hardLettersBlocked ? 'Desbloquear Difíceis' : 'Bloquear Difíceis (K, W, Y, X, Z)'}
+              </button>
+            )}
+          </div>
+          <p className="mb-4 text-xs text-slate-500">
+            {isHost
+              ? 'Clique em qualquer letra para incluir ou excluir do sorteio das rodadas.'
+              : 'Letras liberadas pelo anfitrião para sorteio.'}
+          </p>
+
+          <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-9 md:grid-cols-13">
+            {ALL_LETTERS.map((letter) => {
+              const isExcluded = excludedLetters.includes(letter);
+              return (
+                <button
+                  key={letter}
+                  type="button"
+                  disabled={!isHost}
+                  onClick={() => handleToggleLetter(letter)}
+                  className={`h-9 rounded-lg text-xs font-bold border transition ${
+                    isExcluded
+                      ? 'border-slate-200 bg-slate-100 text-slate-300 line-through'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400 hover:bg-indigo-50'
+                  }`}
+                >
+                  {letter}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Card 4: Confirmação & Início (Apenas anfitrião) */}
+        {isHost && (
+          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-indigo-50 p-6 sm:flex-row">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Tudo pronto para o jogo?</h3>
+              <p className="text-xs text-slate-500">
+                {room.totalRounds} rodadas configuradas • {categoryNames.length} categorias ativas • {ALL_LETTERS.length - excludedLetters.length} letras disponíveis
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onStartGame}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-xl">play_circle</span>
+              Iniciar Partida Agora
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

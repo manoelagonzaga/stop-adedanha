@@ -1,161 +1,203 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { EntryScreen } from './screens/EntryScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
-import type { RoomState, Answer, Player } from './types';
-import { v4 as uuidv4 } from 'uuid';
+import { PodiumScreen } from './screens/PodiumScreen';
+import { useGameSocket, useGameState } from './hooks/useGameSocket';
+import type { RoomState, FinalResults } from './types';
 
-// ── Demo stub state — replace with real WebSocket state in task 4 ──
-const DEMO_ROOM: RoomState = {
-  code: 'XYD-7',
-  phase: 'CONFIGURING',
-  players: [
-    { id: 'p1', nickname: 'Rafael Bezerra', isHost: false, status: 'active', score: 140 },
-    { id: 'p2', nickname: 'Marina C.', isHost: false, status: 'active', score: 95 },
-    { id: 'p3', nickname: 'Diego F.', isHost: false, status: 'active', score: 62 },
-  ],
-  categories: [
-    { id: 'cat-1', name: 'Nome' },
-    { id: 'cat-2', name: 'Comidas' },
-    { id: 'cat-3', name: 'Famosos' },
-    { id: 'cat-4', name: 'Objeto' },
-  ],
-  currentRound: 2,
-  totalRounds: 4,
-  currentLetter: 'S',
-  roundDeadline: Date.now() + 60_000,
-};
+// ── WebSocket URL ─────────────────────────────────────────────────────────────
+// In dev mode the Vite proxy forwards /ws/* to the local wrangler backend.
+// In production replace with the actual Workers URL.
+function wsUrl(roomCode: string): string {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const host = location.host;
+  return `${proto}://${host}/rooms/${roomCode}`;
+}
 
-const DEMO_ANSWERS: Answer[] = [
-  { playerId: 'p1', categoryId: 'cat-1', value: 'Silvia', isValid: true, invalidations: [], score: 5 },
-  { playerId: 'p2', categoryId: 'cat-1', value: 'Silvia', isValid: true, invalidations: [], score: 5 },
-  { playerId: 'p3', categoryId: 'cat-1', value: '', isValid: false, invalidations: [], score: 0 },
-  { playerId: 'p1', categoryId: 'cat-2', value: 'Salada', isValid: true, invalidations: [], score: 10 },
-  { playerId: 'p2', categoryId: 'cat-2', value: 'Sopa', isValid: true, invalidations: [], score: 10 },
-  { playerId: 'p3', categoryId: 'cat-2', value: 'Salsicha', isValid: true, invalidations: [], score: 10 },
-];
+type UIScreen = 'início' | 'configuração' | 'jogo' | 'resultado' | 'pódio';
 
-type UIScreen = 'início' | 'configuração' | 'jogo' | 'resultado';
+// ── Stub final results for when finalResults is null ─────────────────────────
+function buildFinalResults(room: RoomState): import('./types').FinalResults {
+  const sorted = [...room.players].sort((a, b) => b.score - a.score);
+  const podium = sorted.slice(0, 3).map((p, i) => ({
+    position: (i + 1) as 1 | 2 | 3,
+    playerId: p.id,
+    nickname: p.nickname,
+    score: p.score,
+    tier: (['gold', 'silver', 'bronze'] as const)[i],
+  }));
+  const list = sorted.slice(3).map((p, i) => ({
+    position: i + 4,
+    playerId: p.id,
+    nickname: p.nickname,
+    score: p.score,
+  }));
+  return { podium, list };
+}
 
 export default function App() {
   const [screen, setScreen] = useState<UIScreen>('início');
-  const [room, setRoom] = useState<RoomState>(DEMO_ROOM);
-  const [MY_ID, setMY_ID] = useState<string>('p1');
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const pendingCommandRef = useRef<(() => void) | null>(null);
 
-  // ── Screen navigation stubs (will be replaced by WebSocket events in task 4) ──
-  function handleEnterRoom(nickname: string, code: string) {
-    console.log('Joining room', code, 'as', nickname);
-    const player = newPlayer(nickname, false);
+  const { state, setState, handleEvent } = useGameState();
 
-    setRoom((r: RoomState) => ({
-      ...r,
-      code,
-      players: [...r.players, player]
-    }));
-    setMY_ID(player.id);
-    setScreen('configuração');
-  }
+  const onEvent = useCallback(
+    (event: import('./types').ServerEvent) => {
+      handleEvent(event);
 
-  function handleCreateRoom(nickname: string, code: string) {
-    const hostPlayer = newPlayer(nickname, true);
-    setRoom((r: RoomState) => ({
-      ...r,
-      code,
-      players: [hostPlayer]
+      // Drive screen transitions from server events
+      if (event.type === 'room:state') {
+        const phase = event.state.phase;
+        if (phase === 'CONFIGURING' || phase === 'WAITING_PLAYERS') setScreen('configuração');
+        else if (phase === 'ROUND_ACTIVE') setScreen('jogo');
+        else if (phase === 'CATEGORY_REVIEW' || phase === 'ROUND_RESULTS') setScreen('resultado');
+        else if (phase === 'GAME_OVER') setScreen('pódio');
       }
-    ));
-    setMY_ID(hostPlayer.id);
+      if (event.type === 'round:started') setScreen('jogo');
+      if (event.type === 'round:review:category') setScreen('resultado');
+      if (event.type === 'game:final_results') setScreen('pódio');
+
+      // Fire pending command once connected
+      if ((event as { type: string }).type === 'session:ready' && pendingCommandRef.current) {
+        pendingCommandRef.current();
+        pendingCommandRef.current = null;
+      }
+    },
+    [handleEvent]
+  );
+
+  const { status, send } = useGameSocket({
+    url: roomCode ? wsUrl(roomCode) : null,
+    onEvent,
+  });
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
+  function handleCreateRoom(nickname: string, _code: string) {
+    // Server assigns the room code; we connect to a random room name, then send room:create
+    const tempCode = crypto.randomUUID().slice(0, 8).toUpperCase();
+    setRoomCode(tempCode);
+    pendingCommandRef.current = () =>
+      send({ type: 'room:create', requestId: crypto.randomUUID(), nickname });
     setScreen('configuração');
   }
 
-  function newPlayer(nickname: string, isHost: boolean): Player {
-    const newPlayer: Player = {
-      id: uuidv4(),
-      isHost,
-      nickname,
-      score: 0,
-      status: 'active'
-    }
-    return newPlayer;
+  function handleJoinRoom(nickname: string, code: string) {
+    setRoomCode(code);
+    pendingCommandRef.current = () =>
+      send({ type: 'room:join', requestId: crypto.randomUUID(), code, nickname });
+    setScreen('configuração');
   }
-
 
   function handleUpdateCategories(categories: string[]) {
-    setRoom((r: RoomState) => ({
-      ...r,
-      categories: categories.map((name, i) => ({ id: `cat-${i}`, name })),
+    send({ type: 'lobby:categories:update', requestId: crypto.randomUUID(), categories });
+    // Optimistic update
+    setState((s) => ({
+      ...s,
+      room: s.room
+        ? { ...s.room, categories: categories.map((name, i) => ({ id: `cat-${i}`, name })) }
+        : s.room,
     }));
   }
 
   function handleUpdateRounds(totalRounds: number) {
-    setRoom((r: RoomState) => ({ ...r, totalRounds }));
+    // Optimistic update; no dedicated command yet — server will sync via room:state
+    setState((s) => ({
+      ...s,
+      room: s.room ? { ...s.room, totalRounds } : s.room,
+    }));
   }
 
   function handleStartGame() {
-    setRoom((r: RoomState) => ({ ...r, phase: 'ROUND_ACTIVE', roundDeadline: Date.now() + r.categories.length * 20_000 }));
-    setScreen('jogo');
+    send({ type: 'game:start', requestId: crypto.randomUUID() });
   }
 
   function handleSubmitAnswers(roundId: string, answers: Record<string, string>) {
-    console.log('Submitted answers for', roundId, answers);
+    send({ type: 'answer:submit', requestId: crypto.randomUUID(), roundId, answers });
   }
 
   function handleStop(roundId: string) {
-    console.log('Stop pressed for', roundId);
-    setRoom((r: RoomState) => ({ ...r, phase: 'ROUND_RESULTS' }));
-    setScreen('resultado');
+    send({ type: 'round:stop', requestId: crypto.randomUUID(), roundId });
+  }
+
+  function handleInvalidate(roundId: string, answerKey: string) {
+    // answerKey is "playerId-categoryId"
+    const [, categoryId] = answerKey.split('-');
+    send({
+      type: 'answer:invalidate',
+      requestId: crypto.randomUUID(),
+      roundId,
+      categoryId,
+      answerId: answerKey,
+    });
   }
 
   function handleNextRound() {
-    setRoom((r: RoomState) => ({
-      ...r,
-      phase: r.currentRound >= r.totalRounds ? 'GAME_OVER' : 'ROUND_ACTIVE',
-      currentRound: Math.min(r.currentRound + 1, r.totalRounds),
-      roundDeadline: Date.now() + r.categories.length * 20_000,
-    }));
+    // Server transitions automatically; this is a local fallback
     setScreen('jogo');
   }
 
-  function handleInvalidate(roundId: string, answerId: string) {
-    console.log('Invalidate', answerId, 'in', roundId);
+  function handlePlayAgain() {
+    setRoomCode(null);
+    setState({ room: null, answers: [], finalResults: null, myPlayerId: null });
+    setScreen('início');
   }
+
+  // ── Resolve display values ────────────────────────────────────────────────
+
+  const room: RoomState = state.room ?? {
+    code: roomCode ?? '—',
+    phase: 'CONFIGURING',
+    players: [],
+    categories: [
+      { id: 'cat-0', name: 'Nome' },
+      { id: 'cat-1', name: 'Comidas' },
+      { id: 'cat-2', name: 'Famosos' },
+      { id: 'cat-3', name: 'Objeto' },
+    ],
+    currentRound: 1,
+    totalRounds: 5,
+    currentLetter: 'S',
+    roundDeadline: Date.now() + 60_000,
+  };
+
+  const myPlayerId = state.myPlayerId ?? 'local-player';
+  const finalResults: FinalResults = state.finalResults ?? buildFinalResults(room);
 
   return (
     <>
       <AnimatedBackground />
 
-      {/* ── Dev navigation strip (remove before production) ── */}
-      <nav
-        aria-label="Dev screen switcher"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex gap-2 rounded-full bg-black/70 px-4 py-2 backdrop-blur-md"
-      >
-        {(['início', 'configuração', 'jogo', 'resultado'] as UIScreen[]).map((s) => (
-          <button
-            key={s}
-            onClick={() => setScreen(s)}
-            className={[
-              'rounded-full px-3 py-1 text-xs font-semibold transition',
-              screen === s ? 'bg-white text-black' : 'text-white/60 hover:text-white',
-            ].join(' ')}
-          >
-            {s}
-          </button>
-        ))}
-      </nav>
+      {/* Connection status badge (dev helper) */}
+      {status !== 'connected' && status !== 'disconnected' && (
+        <div
+          className={`fixed right-4 top-4 z-50 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+            status === 'connecting'
+              ? 'bg-amber-400 text-amber-900'
+              : 'bg-rose-500 text-white'
+          }`}
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${
+              status === 'connecting' ? 'animate-pulse bg-amber-700' : 'bg-white'
+            }`}
+          />
+          {status === 'connecting' ? 'Conectando...' : 'Conexão perdida'}
+        </div>
+      )}
 
       {screen === 'início' && (
-        <EntryScreen
-          onEnterRoom={handleEnterRoom}
-          onCreateRoom={handleCreateRoom}
-        />
+        <EntryScreen onEnterRoom={handleJoinRoom} onCreateRoom={handleCreateRoom} />
       )}
 
       {screen === 'configuração' && (
         <LobbyScreen
           room={room}
-          myPlayerId={MY_ID}
+          myPlayerId={myPlayerId}
           onUpdateCategories={handleUpdateCategories}
           onUpdateRounds={handleUpdateRounds}
           onStartGame={handleStartGame}
@@ -165,7 +207,7 @@ export default function App() {
       {screen === 'jogo' && (
         <GameScreen
           room={room}
-          myPlayerId={MY_ID}
+          myPlayerId={myPlayerId}
           onSubmitAnswers={handleSubmitAnswers}
           onStop={handleStop}
         />
@@ -174,12 +216,21 @@ export default function App() {
       {screen === 'resultado' && (
         <ResultsScreen
           room={room}
-          myPlayerId={MY_ID}
-          answers={DEMO_ANSWERS}
+          myPlayerId={myPlayerId}
+          answers={state.answers}
           ranking={room.players}
-          roundScore={20}
           onNextRound={handleNextRound}
+          onFinishGame={() => setScreen('pódio')}
           onInvalidate={handleInvalidate}
+        />
+      )}
+
+      {screen === 'pódio' && (
+        <PodiumScreen
+          results={finalResults}
+          myPlayerId={myPlayerId}
+          onPlayAgain={handlePlayAgain}
+          onBackToHome={handlePlayAgain}
         />
       )}
     </>

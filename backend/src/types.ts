@@ -1,3 +1,5 @@
+// ── Shared domain types for backend (mirrors shared/types.ts) ──────────────
+
 export type GamePhase =
   | 'WAITING_PLAYERS'
   | 'CONFIGURING'
@@ -12,6 +14,7 @@ export interface Player {
   isHost: boolean;
   status: 'active' | 'disconnected';
   score: number;
+  avatar?: string;
 }
 
 export interface Category {
@@ -24,28 +27,8 @@ export interface Answer {
   categoryId: string;
   value: string;
   isValid: boolean;
-  invalidations: string[]; // array of playerIds who invalidated it
+  invalidations: string[];
   score: number;
-}
-
-export interface PodiumItem {
-  position: 1 | 2 | 3;
-  playerId: string;
-  nickname: string;
-  score: number;
-  tier: 'gold' | 'silver' | 'bronze';
-}
-
-export interface RankingListItem {
-  position: number;
-  playerId: string;
-  nickname: string;
-  score: number;
-}
-
-export interface FinalResults {
-  podium: PodiumItem[];
-  list: RankingListItem[];
 }
 
 export interface RoomState {
@@ -61,18 +44,20 @@ export interface RoomState {
   reviewDeadline?: number;
 }
 
-// Client to Server Commands
+// Client → Server
 export type ClientCommand =
   | { type: 'room:create'; requestId: string; nickname: string; totalRounds?: number }
   | { type: 'room:join'; requestId: string; code: string; nickname: string }
   | { type: 'lobby:categories:update'; requestId: string; categories: string[] }
+  | { type: 'lobby:rounds:update'; requestId: string; totalRounds: number }
   | { type: 'game:start'; requestId: string }
   | { type: 'answer:submit'; requestId: string; roundId: string; answers: Record<string, string> }
   | { type: 'round:stop'; requestId: string; roundId: string }
   | { type: 'answer:invalidate'; requestId: string; roundId: string; categoryId: string; answerId: string };
 
-// Server to Client Events
+// Server → Client
 export type ServerEvent =
+  | { type: 'session:ready'; playerId: string }
   | { type: 'room:state'; state: RoomState }
   | { type: 'round:started'; id: string; letter: string; categories: Category[]; deadline: number }
   | {
@@ -91,8 +76,25 @@ export type ServerEvent =
       scoreboard: Player[];
     }
   | { type: 'round:results'; answers: Answer[]; ranking: Player[] }
-  | { type: 'game:final_results'; podium: PodiumItem[]; list: RankingListItem[] }
+  | {
+      type: 'game:final_results';
+      podium: PodiumItem[];
+      list: RankingListItem[];
+    }
   | { type: 'player:presence'; id: string; nickname: string; status: 'active' | 'disconnected' }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string; requestId?: string };
 
+export interface PodiumItem {
+  position: 1 | 2 | 3;
+  playerId: string;
+  nickname: string;
+  score: number;
+  tier: 'gold' | 'silver' | 'bronze';
+}
 
+export interface RankingListItem {
+  position: number;
+  playerId: string;
+  nickname: string;
+  score: number;
+}
