@@ -17,7 +17,6 @@ export function ResultsScreen({
   room,
   myPlayerId,
   answers,
-  ranking,
   onNextRound,
   onFinishGame,
   onInvalidate,
@@ -25,7 +24,6 @@ export function ResultsScreen({
   const { showToast } = useToast();
   const roundId = `round-${room.currentRound}`;
   const me = room.players.find((p: Player) => p.id === myPlayerId);
-  const isHost = me?.isHost ?? false;
   const isLastRound = room.currentRound >= room.totalRounds;
 
   // Sequential category index
@@ -206,13 +204,12 @@ export function ResultsScreen({
               key={cat.id}
               type="button"
               onClick={() => setActiveCategoryIndex(idx)}
-              className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold transition md:text-sm ${
-                isActive
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold transition md:text-sm ${isActive
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : isCompleted
-                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-              }`}
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                }`}
             >
               <span>{idx + 1}. {cat.name}</span>
               {isActive && <span className="h-2 w-2 rounded-full bg-amber-400" />}
@@ -253,20 +250,18 @@ export function ResultsScreen({
               const isInvalidated = currentInvalidators.length > 0;
 
               const isUnique = hasAnswer && wordFrequency[cleanVal.toLowerCase()] === 1;
-              const isDuplicated = hasAnswer && wordFrequency[cleanVal.toLowerCase()] > 1;
 
               return (
                 <div
                   key={key}
-                  className={`flex flex-col justify-between rounded-2xl p-5 shadow-sm transition ${
-                    !hasAnswer
+                  className={`flex flex-col justify-between rounded-2xl p-5 shadow-sm transition ${!hasAnswer
                       ? 'border border-dashed border-slate-300 bg-slate-50 opacity-75'
                       : isInvalidated
-                      ? 'border-2 border-rose-300 bg-rose-50/50'
-                      : isUnique
-                      ? 'border border-emerald-200 bg-white'
-                      : 'border border-amber-200 bg-white'
-                  }`}
+                        ? 'border-2 border-rose-300 bg-rose-50/50'
+                        : isUnique
+                          ? 'border border-emerald-200 bg-white'
+                          : 'border border-amber-200 bg-white'
+                    }`}
                 >
                   <div>
                     {/* Card Header */}
@@ -315,11 +310,10 @@ export function ResultsScreen({
                       </span>
                       {hasAnswer ? (
                         <span
-                          className={`text-2xl font-black tracking-tight ${
-                            isInvalidated
+                          className={`text-2xl font-black tracking-tight ${isInvalidated
                               ? 'text-rose-700 line-through'
                               : 'text-slate-900'
-                          }`}
+                            }`}
                         >
                           {answer.value}
                         </span>
@@ -336,20 +330,18 @@ export function ResultsScreen({
                     <span className="text-xs font-medium text-slate-400">
                       {!hasAnswer
                         ? 'Tempo esgotado'
-                        : `${currentInvalidators.length} ${
-                            currentInvalidators.length === 1 ? 'contestação' : 'contestações'
-                          }`}
+                        : `${currentInvalidators.length} ${currentInvalidators.length === 1 ? 'contestação' : 'contestações'
+                        }`}
                     </span>
 
                     {hasAnswer && (
                       <button
                         type="button"
                         onClick={() => handleToggleContest(answer)}
-                        className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                          hasVotedInvalid
+                        className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition ${hasVotedInvalid
                             ? 'bg-rose-600 text-white shadow-sm'
                             : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
-                        }`}
+                          }`}
                       >
                         <span className="material-symbols-outlined text-sm">
                           {hasVotedInvalid ? 'thumb_down' : 'flag'}
@@ -418,19 +410,18 @@ export function ResultsScreen({
                 index === 0
                   ? 'bg-amber-400 text-amber-950'
                   : index === 1
-                  ? 'bg-slate-200 text-slate-700'
-                  : index === 2
-                  ? 'bg-amber-700 text-white'
-                  : 'bg-slate-100 text-slate-500';
+                    ? 'bg-slate-200 text-slate-700'
+                    : index === 2
+                      ? 'bg-amber-700 text-white'
+                      : 'bg-slate-100 text-slate-500';
 
               return (
                 <div
                   key={player.id}
-                  className={`flex items-center justify-between rounded-xl p-3 transition ${
-                    isMe
+                  className={`flex items-center justify-between rounded-xl p-3 transition ${isMe
                       ? 'border border-amber-200 bg-amber-50/70'
                       : 'border border-slate-100 bg-slate-50'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <span

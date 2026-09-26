@@ -77,7 +77,7 @@ export default function App() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  function handleCreateRoom(nickname: string, _code: string) {
+  function handleCreateRoom(nickname: string) {
     // Server assigns the room code; we connect to a random room name, then send room:create
     const tempCode = crypto.randomUUID().slice(0, 8).toUpperCase();
     setRoomCode(tempCode);
@@ -175,16 +175,14 @@ export default function App() {
       {/* Connection status badge (dev helper) */}
       {status !== 'connected' && status !== 'disconnected' && (
         <div
-          className={`fixed right-4 top-4 z-50 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-            status === 'connecting'
+          className={`fixed right-4 top-4 z-50 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${status === 'connecting'
               ? 'bg-amber-400 text-amber-900'
               : 'bg-rose-500 text-white'
-          }`}
+            }`}
         >
           <span
-            className={`h-2 w-2 rounded-full ${
-              status === 'connecting' ? 'animate-pulse bg-amber-700' : 'bg-white'
-            }`}
+            className={`h-2 w-2 rounded-full ${status === 'connecting' ? 'animate-pulse bg-amber-700' : 'bg-white'
+              }`}
           />
           {status === 'connecting' ? 'Conectando...' : 'Conexão perdida'}
         </div>
