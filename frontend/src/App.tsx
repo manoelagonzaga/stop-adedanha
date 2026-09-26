@@ -8,12 +8,13 @@ import { PodiumScreen } from './screens/PodiumScreen';
 import { useGameSocket, useGameState } from './hooks/useGameSocket';
 import type { RoomState, FinalResults } from './types';
 
+
 // ── WebSocket URL ─────────────────────────────────────────────────────────────
 // In dev mode the Vite proxy forwards /ws/* to the local wrangler backend.
 // In production replace with the actual Workers URL.
 function wsUrl(roomCode: string): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = location.host;
+  const host = import.meta.env.VITE_BACKEND_HOST || location.host;
   return `${proto}://${host}/rooms/${roomCode}`;
 }
 
@@ -176,8 +177,8 @@ export default function App() {
       {status !== 'connected' && status !== 'disconnected' && (
         <div
           className={`fixed right-4 top-4 z-50 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${status === 'connecting'
-              ? 'bg-amber-400 text-amber-900'
-              : 'bg-rose-500 text-white'
+            ? 'bg-amber-400 text-amber-900'
+            : 'bg-rose-500 text-white'
             }`}
         >
           <span
