@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STOP! Online - Multiplayer Interativo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              indigo: '#4F46E5',
+              'indigo-hover': '#4338CA',
+              'indigo-light': '#EEF2FF',
+              tomato: '#EF4444',
+              'tomato-hover': '#DC2626',
+              emerald: '#10B981',
+              amber: '#F59E0B',
+              lavender: '#F8F9FE',
+              dark: '#1E1B4B',
+              muted: '#64748B'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #F8F9FE;
+      color: #1E1B4B;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      vertical-align: middle;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1;
+    }
+    .screen-view {
+      display: none;
+      opacity: 0;
+      transition: opacity 0.25s ease-in-out;
+    }
+    .screen-view.active {
+      display: block;
+      opacity: 1;
+    }
+    /* Pulse for stop button */
+    @keyframes pulse-stop {
+      0%, 100% { transform: scale(1); box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.4); }
+      50% { transform: scale(1.02); box-shadow: 0 20px 35px -5px rgba(239, 68, 68, 0.6); }
+    }
+    .animate-stop-btn {
+      animation: pulse-stop 2.2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#F8F9FE] text-[#1E1B4B] antialiased selection:bg-indigo-100 selection:text-indigo-800">
+
+  <!-- FLUTUANTE: BARRA DE NAVEGAÇÃO / FLUXO RÁPIDO -->
+  <aside class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-full shadow-2xl border border-indigo-100 flex items-center gap-2 text-xs md:text-sm font-semibold">
+    <span class="text-xs uppercase tracking-wider text-slate-400 font-bold px-2 hidden sm:inline">Etapas do Jogo:</span>
+    <button onclick="navigateTo('home')" id="nav-btn-home" class="step-btn px-3 py-1.5 rounded-full transition-all bg-indigo-600 text-white shadow-sm flex items-center gap-1.5">
+      <span>1. Início</span>
+    </button>
+    <button onclick="navigateTo('lobby')" id="nav-btn-lobby" class="step-btn px-3 py-1.5 rounded-full transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+      <span>2. Lobby</span>
+    </button>
+    <button onclick="navigateTo('game')" id="nav-btn-game" class="step-btn px-3 py-1.5 rounded-full transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+      <span>3. Partida</span>
+    </button>
+    <button onclick="navigateTo('vote')" id="nav-btn-vote" class="step-btn px-3 py-1.5 rounded-full transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+      <span>4. Votação</span>
+    </button>
+    <button onclick="navigateTo('podium')" id="nav-btn-podium" class="step-btn px-3 py-1.5 rounded-full transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+      <span>5. Pódio</span>
+    </button>
+  </aside>
+
+  <!-- CABEÇALHO GLOBAL UNIVERSAL -->
+  <header class="w-full bg-white/85 backdrop-blur-md border-b border-indigo-100/70 sticky top-0 z-40 transition-colors">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <!-- Logo & Status -->
+      <div class="flex items-center gap-4">
+        <button onclick="navigateTo('home')" class="flex items-center gap-2 group text-left">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-black text-xl shadow-md shadow-indigo-200 group-hover:scale-105 transition-transform">
+            !
+          </div>
+          <div>
+            <span class="text-2xl font-black tracking-tight text-indigo-900 group-hover:text-indigo-600 transition-colors">STOP!</span>
+            <span class="text-[10px] block font-bold text-indigo-400 uppercase tracking-wider -mt-1">Multiplayer Online</span>
+          </div>
+        </button>
+
+        <div class="hidden lg:flex items-center gap-2 pl-4 border-l border-slate-200 text-xs">
+          <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            3.492 jogadores online
+          </span>
+          <span class="text-slate-400">•</span>
+          <span class="text-slate-500">Servidor BR-Leste (18ms)</span>
+        </div>
+      </div>
+
+      <!-- Ações do Header (Contextual) -->
+      <div class="flex items-center gap-3">
+        <div id="room-code-badge" class="hidden items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm border border-indigo-100">
+          <span class="material-symbols-outlined text-base">tag</span>
+          <span>SALA: <strong id="header-room-display">#STP-9482</strong></span>
+          <button onclick="copyRoomLink()" title="Copiar Link" class="hover:text-indigo-900 ml-1 text-xs underline">Copiar</button>
+        </div>
+
+        <div id="header-player-pill" class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full text-sm font-semibold">
+          <span class="text-lg">🦊</span>
+          <span id="header-player-name">CapitãoPalavra</span>
+          <span class="bg-indigo-600 text-white text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md">Host</span>
+        </div>
+
+        <button onclick="toggleAudio()" class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 text-sm shadow-sm" title="Alternar Som">
+          <span id="audio-icon" class="material-symbols-outlined text-lg">volume_up</span>
+        </button>
+
+        <button onclick="navigateTo('home')" class="px-3.5 py-1.5 text-rose-600 hover:bg-rose-50 rounded-lg text-sm font-bold flex items-center gap-1 transition-colors border border-rose-200/50">
+          <span class="material-symbols-outlined text-base">logout</span>
+          <span class="hidden sm:inline">Sair</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL (TELAS INTERCAMBIÁVEIS) -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 pb-24">
+
+    <!-- ==============================================
+         1. TELA INICIAL (CRIAR OU ENTRAR)
+    =============================================== -->
+    <section id="screen-home" class="screen-view active">
+      <!-- Hero Banner -->
+      <div class="text-center max-w-3xl mx-auto my-8">
+        <div class="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+          <span class="material-symbols-outlined text-sm text-amber-500 fill">bolt</span>
+          Multiplayer em Tempo Real • A clássica Adedonha Turbo
+        </div>
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">
+          Dedos ágeis, mentes rápidas: <br>
+          <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-indigo-700 to-rose-600">Grite STOP primeiro!</span>
+        </h1>
+        <p class="mt-4 text-slate-600 text-base md:text-lg max-w-xl mx-auto">
+          Desafie seus amigos no jogo de vocabulário mais frenético da internet. Crie sua sala privada ou digite o PIN de um amigo para começar.
+        </p>
+      </div>
+
+      <!-- Grid: Criar Sala vs Entrar -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-6">
+        
+        <!-- Card 1: Criar Sala Privada -->
+        <div class="bg-white rounded-3xl p-6 md:p-8 shadow-xl shadow-indigo-100/50 border border-indigo-100 flex flex-col justify-between relative overflow-hidden group">
+          <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-50/60 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+          <div>
+            <div class="flex items-center justify-between mb-6">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200">
+                  <span class="material-symbols-outlined text-2xl">add_circle</span>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-slate-900">Criar Sala Privada</h3>
+                  <p class="text-xs text-slate-500">Configure temas e convide seus amigos</p>
+                </div>
+              </div>
+              <span class="text-xs bg-indigo-50 text-indigo-700 font-bold px-2.5 py-1 rounded-full border border-indigo-100">Anfitrião VIP</span>
+            </div>
+
+            <!-- Form -->
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Seu Apelido no Jogo</label>
+                <div class="relative">
+                  <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-lg">badge</span>
+                  <input type="text" id="create-nickname" value="CapitãoPalavra" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-slate-800 outline-none transition">
+                </div>
+              </div>
+
+              <!-- Escolha de Avatar -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Seu Avatar</label>
+                <div class="flex items-center gap-2">
+                  <button type="button" onclick="selectAvatar('🦊', this)" class="avatar-option w-11 h-11 rounded-xl bg-indigo-100 border-2 border-indigo-600 text-2xl flex items-center justify-center transition-transform hover:scale-105">🦊</button>
+                  <button type="button" onclick="selectAvatar('🐙', this)" class="avatar-option w-11 h-11 rounded-xl bg-slate-100 border-2 border-transparent text-2xl flex items-center justify-center transition-transform hover:scale-105">🐙</button>
+                  <button type="button" onclick="selectAvatar('🐵', this)" class="avatar-option w-11 h-11 rounded-xl bg-slate-100 border-2 border-transparent text-2xl flex items-center justify-center transition-transform hover:scale-105">🐵</button>
+                  <button type="button" onclick="selectAvatar('🦁', this)" class="avatar-option w-11 h-11 rounded-xl bg-slate-100 border-2 border-transparent text-2xl flex items-center justify-center transition-transform hover:scale-105">🦁</button>
+                  <button type="button" onclick="randomAvatar(this)" class="w-11 h-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-100 text-xs font-bold" title="Sortear Aleatório">
+                    <span class="material-symbols-outlined text-lg">shuffle</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Resumo das categorias -->
+              <div class="bg-indigo-50/50 rounded-xl p-3 border border-indigo-100/60 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-indigo-600 text-base">category</span>
+                  <div class="text-xs">
+                    <span class="font-bold text-slate-800">Categorias: </span>
+                    <span class="text-slate-600" id="home-categories-preview">Nome, CEP, Animal, Cor, Fruta, Objeto (6)</span>
+                  </div>
+                </div>
+                <button type="button" onclick="navigateTo('lobby')" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline">Personalizar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 pt-4 border-t border-slate-100">
+            <button onclick="actionCreateRoom()" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 rounded-xl font-bold text-base shadow-lg shadow-indigo-300/50 flex items-center justify-center gap-2 transition">
+              <span class="material-symbols-outlined text-xl">rocket_launch</span>
+              Criar Sala e Convidar Amigos
+            </button>
+            <p class="text-[11px] text-center text-slate-400 font-medium mt-2.5 flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-emerald-500 text-sm">check_circle</span>
+              Link direto e código gerados na hora • Até 12 jogadores
+            </p>
+          </div>
+        </div>
+
+        <!-- Card 2: Entrar em Sala Existente -->
+        <div class="bg-white rounded-3xl p-6 md:p-8 shadow-xl shadow-rose-100/40 border border-rose-100 flex flex-col justify-between relative overflow-hidden group">
+          <div class="absolute top-0 right-0 w-32 h-32 bg-rose-50/50 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+          <div>
+            <div class="flex items-center justify-between mb-6">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-200">
+                  <span class="material-symbols-outlined text-2xl">login</span>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-slate-900">Entrar em Sala</h3>
+                  <p class="text-xs text-slate-500">Tem o PIN ou link do seu amigo?</p>
+                </div>
+              </div>
+              <span class="text-xs bg-rose-50 text-rose-700 font-bold px-2.5 py-1 rounded-full border border-rose-100">Conexão Direta</span>
+            </div>
+
+            <!-- Form -->
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Seu Apelido</label>
+                <div class="relative">
+                  <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-lg">sentiment_satisfied</span>
+                  <input type="text" id="join-nickname" placeholder="Ex: Veloz99" value="Veloz99" class="w-full bg-slate-50 border border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-slate-800 outline-none transition">
+                </div>
+              </div>
+
+              <!-- Input Código PIN da Sala -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Código da Sala (6 dígitos)</label>
+                <div class="grid grid-cols-6 gap-2">
+                  <input type="text" maxlength="1" value="S" class="pin-digit w-full aspect-square text-center font-black text-lg bg-slate-50 border-2 border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl text-slate-900 outline-none uppercase transition">
+                  <input type="text" maxlength="1" value="T" class="pin-digit w-full aspect-square text-center font-black text-lg bg-slate-50 border-2 border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl text-slate-900 outline-none uppercase transition">
+                  <input type="text" maxlength="1" value="P" class="pin-digit w-full aspect-square text-center font-black text-lg bg-slate-50 border-2 border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl text-slate-900 outline-none uppercase transition">
+                  <input type="text" maxlength="1" value="9" class="pin-digit w-full aspect-square text-center font-black text-lg bg-slate-50 border-2 border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl text-slate-900 outline-none uppercase transition">
+                  <input type="text" maxlength="1" value="4" class="pin-digit w-full aspect-square text-center font-black text-lg bg-slate-50 border-2 border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl text-slate-900 outline-none uppercase transition">
+                  <input type="text" maxlength="1" value="8" class="pin-digit w-full aspect-square text-center font-black text-lg bg-slate-50 border-2 border-slate-200 focus:border-rose-500 focus:bg-white rounded-xl text-slate-900 outline-none uppercase transition">
+                </div>
+                <div class="flex justify-between items-center text-[11px] text-slate-400 mt-1.5 font-medium">
+                  <span>Exemplo: STP-948</span>
+                  <button type="button" onclick="pasteRoomCode()" class="text-rose-600 hover:underline font-bold">Colar link ou código</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 pt-4 border-t border-slate-100">
+            <button onclick="actionJoinRoom()" class="w-full bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white py-3.5 rounded-xl font-bold text-base shadow-lg shadow-rose-300/50 flex items-center justify-center gap-2 transition">
+              <span class="material-symbols-outlined text-xl">sports_esports</span>
+              Entrar no Jogo Agora
+            </button>
+            <p class="text-[11px] text-center text-slate-400 font-medium mt-2.5">
+              Não precisa de cadastro ou download • Direto no navegador
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guia Rápido: Como Jogar STOP! Online -->
+      <div class="mt-16 max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+          <span class="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full uppercase tracking-wider">Fácil e Rápido de Aprender</span>
+          <h2 class="text-2xl md:text-3xl font-black text-slate-900 mt-2">Como Jogar STOP! Online</h2>
+          <p class="text-slate-500 text-sm mt-1">As clássicas regras do papel, otimizadas para partidas virtuais dinâmicas, justas e muito divertidas.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="bg-white p-5 rounded-2xl border border-indigo-50 shadow-md">
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg mb-3">01</div>
+            <h4 class="font-bold text-slate-800 text-base">Sorteie a Letra</h4>
+            <p class="text-slate-500 text-xs mt-1.5 leading-relaxed">A cada rodada a roleta escolhe uma letra aleatória do alfabeto. Todos os participantes começam exatamente no mesmo segundo!</p>
+          </div>
+
+          <div class="bg-white p-5 rounded-2xl border border-amber-50 shadow-md">
+            <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-black text-lg mb-3">02</div>
+            <h4 class="font-bold text-slate-800 text-base">Preencha Rápido</h4>
+            <p class="text-slate-500 text-xs mt-1.5 leading-relaxed">Digite respostas com a letra da rodada para cada coluna: Nome, Animal, Cidade, Objeto, etc. Quanto mais veloz, maior sua chance de vencer!</p>
+          </div>
+
+          <div class="bg-white p-5 rounded-2xl border border-rose-50 shadow-md">
+            <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-black text-lg mb-3">03</div>
+            <h4 class="font-bold text-slate-800 text-base">Grite STOP! & Pontue</h4>
+            <p class="text-slate-500 text-xs mt-1.5 leading-relaxed">Acabou de preencher? Clique no botão gigante de STOP! O cronômetro congela para todos. Palavras únicas valem 10 pts e repetidas 5 pts.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==============================================
+         2. TELA DE CONFIGURAÇÃO DA SALA E LOBBY
+    =============================================== -->
+    <section id="screen-lobby" class="screen-view">
+      <!-- Topo do Lobby -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-indigo-100 gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="bg-amber-100 text-amber-800 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs fill">star</span> VOCÊ É O HOST
+            </span>
+            <span class="text-slate-400 text-xs">•</span>
+            <span class="text-xs font-bold text-emerald-600 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Salvo em tempo real
+            </span>
+          </div>
+          <h2 class="text-2xl md:text-3xl font-black text-slate-900 mt-1">Sala Privada: <span class="text-indigo-600">#STP-9482</span></h2>
+          <p class="text-slate-500 text-xs md:text-sm">Personalize as rodadas, categorias e letras antes de iniciar.</p>
+        </div>
+
+        <!-- Botões de Ação do Host -->
+        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+          <button onclick="copyRoomLink()" class="flex-1 sm:flex-initial bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 shadow-sm transition">
+            <span class="material-symbols-outlined text-lg">link</span>
+            Copiar Link da Sala
+          </button>
+          <button onclick="navigateTo('game')" class="flex-1 sm:flex-initial bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition">
+            <span class="material-symbols-outlined text-lg">play_arrow</span>
+            Iniciar Partida
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid Principal: Configurações + Lista de Jogadores -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        
+        <!-- Coluna Esquerda/Centro: Ajustes da Partida (2 Cols) -->
+        <div class="lg:col-span-2 space-y-6">
+          
+          <!-- Card 1: Estrutura da Partida (Rodadas + Tempo) -->
+          <div class="bg-white rounded-2xl p-6 border border-indigo-100 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-lg">tune</span>
+                </span>
+                <h3 class="font-bold text-slate-800 text-lg">Regras & Estrutura da Partida</h3>
+              </div>
+              <span class="text-xs text-slate-400 font-medium">Ajuste o ritmo do jogo</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <!-- Número de Rodadas -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Número de Rodadas</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button type="button" onclick="selectRoundCount(3, this)" class="round-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-indigo-400 bg-slate-50 text-slate-700">3</button>
+                  <button type="button" onclick="selectRoundCount(5, this)" class="round-opt py-2 rounded-xl text-sm font-bold border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm">5</button>
+                  <button type="button" onclick="selectRoundCount(8, this)" class="round-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-indigo-400 bg-slate-50 text-slate-700">8</button>
+                  <button type="button" onclick="selectRoundCount(10, this)" class="round-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-indigo-400 bg-slate-50 text-slate-700">10</button>
+                </div>
+              </div>
+
+              <!-- Tempo por Rodada -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Tempo por Rodada</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button type="button" onclick="selectTimeCount(60, this)" class="time-opt py-2 rounded-xl text-sm font-bold border-2 border-rose-500 bg-rose-500 text-white shadow-sm">60s</button>
+                  <button type="button" onclick="selectTimeCount(90, this)" class="time-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-rose-400 bg-slate-50 text-slate-700">90s</button>
+                  <button type="button" onclick="selectTimeCount(120, this)" class="time-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-rose-400 bg-slate-50 text-slate-700">120s</button>
+                  <button type="button" onclick="selectTimeCount(0, this)" class="time-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-rose-400 bg-slate-50 text-slate-700">Sem Fim</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Categorias da Partida -->
+          <div class="bg-white rounded-2xl p-6 border border-indigo-100 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-lg">category</span>
+                </span>
+                <div>
+                  <h3 class="font-bold text-slate-800 text-lg">Categorias da Partida</h3>
+                  <p class="text-xs text-slate-500">Mínimo de 4 para um jogo dinâmico. Adicione ou remova categorias.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs">
+                <span class="text-slate-400">Packs:</span>
+                <button type="button" onclick="loadCategoryPack('classico')" class="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-bold hover:bg-indigo-100">Clássico</button>
+                <button type="button" onclick="loadCategoryPack('geek')" class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold hover:bg-slate-200">Geek/Pop</button>
+                <button type="button" onclick="loadCategoryPack('expert')" class="px-2.5 py-1 bg-rose-50 text-rose-700 rounded-lg font-bold hover:bg-rose-100">Expert 🌶️</button>
+              </div>
+            </div>
+
+            <!-- Tags das Categorias Ativas -->
+            <div id="categories-container" class="flex flex-wrap gap-2.5 my-4">
+              <!-- Renderizado dinamicamente -->
+            </div>
+
+            <!-- Adicionar Nova Categoria -->
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <div class="relative flex-1">
+                <input type="text" id="new-cat-input" placeholder="Criar categoria personalizada (ex: Vilão de Anime, Sobremesa)..." class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl px-4 py-2.5 text-sm outline-none transition">
+              </div>
+              <button onclick="addCustomCategory()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1 transition">
+                <span class="material-symbols-outlined text-base">add</span>
+                Adicionar
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 3: Letras Permitidas -->
+          <div class="bg-white rounded-2xl p-6 border border-indigo-100 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-lg">font_download</span>
+                </span>
+                <h3 class="font-bold text-slate-800 text-lg">Letras Permitidas na Partida</h3>
+              </div>
+              <button onclick="toggleHardLetters()" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition">
+                <span class="material-symbols-outlined text-sm">filter_alt</span>
+                Bloquear Difíceis (K, W, Y, X, Z)
+              </button>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">Clique em qualquer letra para incluir ou excluir do sorteio.</p>
+            
+            <div id="alphabet-grid" class="grid grid-cols-7 sm:grid-cols-9 md:grid-cols-13 gap-1.5">
+              <!-- Preenchido via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Coluna Direita: Jogadores na Sala -->
+        <div class="bg-white rounded-2xl p-6 border border-indigo-100 shadow-sm h-fit">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-indigo-600">group</span>
+              <h3 class="font-bold text-slate-800 text-base">Jogadores na Sala</h3>
+            </div>
+            <span class="bg-indigo-50 text-indigo-700 text-xs font-black px-2.5 py-1 rounded-full" id="players-count-badge">5 / 8</span>
+          </div>
+
+          <!-- Lista de Jogadores -->
+          <div class="space-y-3 mt-4" id="lobby-players-list">
+            <!-- Jogador 1 (Host - Você) -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-amber-200">
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">🦊</span>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-bold text-sm text-slate-800">Lucas</span>
+                    <span class="bg-amber-400 text-amber-950 text-[10px] font-black px-1.5 py-0.2 rounded">HOST</span>
+                  </div>
+                  <span class="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">check_circle</span> Pronto
+                  </span>
+                </div>
+              </div>
+              <span class="text-xs font-bold text-slate-400">Você</span>
+            </div>
+
+            <!-- Jogador 2 -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">🐙</span>
+                <div>
+                  <span class="font-bold text-sm text-slate-800">Sofia Rocha</span>
+                  <span class="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">check_circle</span> Pronto!
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Jogador 3 -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">🐵</span>
+                <div>
+                  <span class="font-bold text-sm text-slate-800">Gabriel M.</span>
+                  <span class="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">check_circle</span> Pronto!
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Jogador 4 -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">🦁</span>
+                <div>
+                  <span class="font-bold text-sm text-slate-800">Beatriz Lima</span>
+                  <span class="text-[11px] text-amber-600 font-medium flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs animate-spin">sync</span> Escolhendo avatar...
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Jogador 5 -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">🐯</span>
+                <div>
+                  <span class="font-bold text-sm text-slate-800">Thiago Santos</span>
+                  <span class="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">check_circle</span> Pronto!
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vaga livre -->
+          <div class="mt-4 p-3 rounded-xl border-2 border-dashed border-slate-200 text-center text-slate-400 text-xs font-semibold hover:border-indigo-300 hover:text-indigo-600 cursor-pointer transition" onclick="copyRoomLink()">
+            + Convidar mais amigos (Copiar link)
+          </div>
+
+          <button onclick="navigateTo('game')" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white py-3.5 rounded-xl font-bold text-base shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 transition">
+            <span class="material-symbols-outlined text-xl">play_circle</span>
+            Iniciar Partida (5 Conectados)
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==============================================
+         3. TELA DE PARTIDA ATIVA (GAMEPLAY E STOP)
+    =============================================== -->
+    <section id="screen-game" class="screen-view">
+      <!-- Barra Superior da Rodada -->
+      <div class="bg-white rounded-3xl p-4 md:p-6 border border-indigo-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        
+        <!-- Info da Rodada -->
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-black text-xl">
+            3/5
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="bg-indigo-100 text-indigo-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">Rodada Ativa</span>
+              <span class="text-xs text-slate-400">Sala Privada #STP94</span>
+            </div>
+            <h2 class="text-xl md:text-2xl font-black text-slate-900">Rodada 3 de 5</h2>
+          </div>
+        </div>
+
+        <!-- Destaque Gigante da Letra Sorteada -->
+        <div class="flex items-center gap-3 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-100 px-6 py-2 rounded-2xl">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Letra da Vez:</span>
+          <div id="round-letter-display" class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-3xl shadow-lg shadow-indigo-300">
+            M
+          </div>
+          <button onclick="rerollLetter()" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 underline" title="Apenas host">
+            <span class="material-symbols-outlined text-sm">casino</span> Sortear outra
+          </button>
+        </div>
+
+        <!-- Cronômetro Decrescente -->
+        <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-2xl">
+          <div class="relative w-10 h-10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-rose-500 text-2xl animate-spin">timelapse</span>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Tempo Restante</span>
+            <span id="game-timer" class="text-2xl font-black text-slate-900 tracking-tight">00:42</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Área de Preenchimento + Painel Lateral de Progresso -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        
+        <!-- Coluna de Digitação das Categorias (2 Cols) -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="flex items-center justify-between px-1">
+            <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+              <span class="material-symbols-outlined text-indigo-600">edit_note</span>
+              Preencha com a Letra <span class="text-indigo-600 font-black text-xl" id="current-letter-lbl">M</span>
+            </h3>
+            <span class="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full" id="filled-count-badge">4 de 7 Preenchidas</span>
+          </div>
+
+          <!-- Campos de Digitação das Categorias -->
+          <div class="space-y-3" id="game-inputs-list">
+            
+            <!-- Campo 1: Nome -->
+            <div class="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm flex items-center gap-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center">1</span>
+              <span class="w-28 font-bold text-sm text-slate-800 truncate">Nome</span>
+              <input type="text" oninput="updateFilledCounter()" value="MATHEUS" class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal" placeholder="Ex: Marcelo...">
+              <span class="text-emerald-500 material-symbols-outlined text-lg">check_circle</span>
+            </div>
+
+            <!-- Campo 2: CEP / Lugar -->
+            <div class="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm flex items-center gap-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center">2</span>
+              <span class="w-28 font-bold text-sm text-slate-800 truncate">CEP / Lugar</span>
+              <input type="text" oninput="updateFilledCounter()" value="MADRID" class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal" placeholder="Ex: Manaus...">
+              <span class="text-emerald-500 material-symbols-outlined text-lg">check_circle</span>
+            </div>
+
+            <!-- Campo 3: Animal -->
+            <div class="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm flex items-center gap-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center">3</span>
+              <span class="w-28 font-bold text-sm text-slate-800 truncate">Animal</span>
+              <input type="text" oninput="updateFilledCounter()" value="MACACO" class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal" placeholder="Ex: Morcego...">
+              <span class="text-emerald-500 material-symbols-outlined text-lg">check_circle</span>
+            </div>
+
+            <!-- Campo 4: Fruta / Alimento -->
+            <div class="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm flex items-center gap-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center">4</span>
+              <span class="w-28 font-bold text-sm text-slate-800 truncate">Fruta / Comida</span>
+              <input type="text" oninput="updateFilledCounter()" value="MELANCIA" class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal" placeholder="Ex: Maçã...">
+              <span class="text-emerald-500 material-symbols-outlined text-lg">check_circle</span>
+            </div>
+
+            <!-- Campo 5: Objeto (Ativo em digitação) -->
+            <div class="bg-white p-3.5 rounded-2xl border-2 border-indigo-500 shadow-md shadow-indigo-100 flex items-center gap-3 ring-2 ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">5</span>
+              <span class="w-28 font-bold text-sm text-indigo-900 truncate">Objeto</span>
+              <input type="text" id="active-game-input" oninput="updateFilledCounter()" value="MARTELO" class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal" placeholder="Ex: Mochila...">
+              <span class="text-xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded">DIGITANDO</span>
+            </div>
+
+            <!-- Campo 6: Cor -->
+            <div class="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm flex items-center gap-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center">6</span>
+              <span class="w-28 font-bold text-sm text-slate-800 truncate">Cor</span>
+              <input type="text" oninput="updateFilledCounter()" placeholder="Ex: Marrom..." class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal">
+              <span class="text-slate-300 text-xs font-bold">TAB ⇥</span>
+            </div>
+
+            <!-- Campo 7: Marca -->
+            <div class="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm flex items-center gap-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+              <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center">7</span>
+              <span class="w-28 font-bold text-sm text-slate-800 truncate">Marca</span>
+              <input type="text" oninput="updateFilledCounter()" placeholder="Ex: Motorola..." class="game-field flex-1 uppercase font-bold text-base text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-normal">
+              <span class="text-slate-300 text-xs font-bold">TAB ⇥</span>
+            </div>
+
+          </div>
+
+          <!-- BOTÃO GIGANTE DE STOP! -->
+          <div class="bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 border-2 border-rose-200 p-5 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+            <div>
+              <div class="flex items-center gap-1.5 text-rose-600 font-black text-sm">
+                <span class="material-symbols-outlined text-lg">bolt</span>
+                COMPLETOU TUDO OU QUER ARRISCAR?
+              </div>
+              <p class="text-xs text-slate-600 mt-0.5">Ao bater no STOP, o cronômetro trava na hora para todos os outros jogadores!</p>
+            </div>
+
+            <button onclick="triggerStopAction()" class="animate-stop-btn bg-rose-600 hover:bg-rose-700 active:scale-95 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-xl shadow-rose-300 flex items-center gap-3 uppercase tracking-wider transition">
+              <span class="material-symbols-outlined text-3xl">pan_tool</span>
+              Gritar STOP!
+            </button>
+          </div>
+        </div>
+
+        <!-- Coluna Lateral: Status dos Adversários ao Vivo (Sem Chat) -->
+        <div class="space-y-4">
+          <div class="bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-amber-500">leaderboard</span>
+                Classificação ao Vivo
+              </h3>
+              <span class="text-xs text-slate-400">Rodada 3</span>
+            </div>
+
+            <!-- Progresso dos Adversários -->
+            <div class="space-y-3.5 mt-4">
+              
+              <!-- Você -->
+              <div class="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200">
+                <div class="flex items-center justify-between text-xs font-bold">
+                  <div class="flex items-center gap-2">
+                    <span>🦊</span>
+                    <span class="text-indigo-900">Lucas M. (Você)</span>
+                  </div>
+                  <span class="text-indigo-600">1.850 pts</span>
+                </div>
+                <div class="w-full bg-indigo-200 h-2 rounded-full mt-2 overflow-hidden">
+                  <div id="player-progress-bar" class="bg-indigo-600 h-full rounded-full transition-all duration-300" style="width: 71%;"></div>
+                </div>
+                <div class="flex justify-between items-center text-[10px] text-slate-500 mt-1 font-semibold">
+                  <span>5 de 7 preenchidos</span>
+                  <span class="text-indigo-700">1º Lugar</span>
+                </div>
+              </div>
+
+              <!-- Adversário 1 -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold">
+                  <div class="flex items-center gap-2">
+                    <span>🦁</span>
+                    <span class="text-slate-800">Beatriz C.</span>
+                  </div>
+                  <span class="text-slate-600">1.420 pts</span>
+                </div>
+                <div class="w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden">
+                  <div class="bg-amber-500 h-full rounded-full" style="width: 57%;"></div>
+                </div>
+                <div class="flex justify-between items-center text-[10px] text-slate-500 mt-1">
+                  <span>Digitando... (4/7)</span>
+                  <span>2º Lugar</span>
+                </div>
+              </div>
+
+              <!-- Adversário 2 -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold">
+                  <div class="flex items-center gap-2">
+                    <span>🐙</span>
+                    <span class="text-slate-800">Gabriel F.</span>
+                  </div>
+                  <span class="text-slate-600">980 pts</span>
+                </div>
+                <div class="w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden">
+                  <div class="bg-slate-400 h-full rounded-full" style="width: 42%;"></div>
+                </div>
+                <div class="flex justify-between items-center text-[10px] text-slate-500 mt-1">
+                  <span>Digitando... (3/7)</span>
+                  <span>3º Lugar</span>
+                </div>
+              </div>
+
+              <!-- Adversário 3 -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold">
+                  <div class="flex items-center gap-2">
+                    <span>🐯</span>
+                    <span class="text-slate-800">Mariana S.</span>
+                  </div>
+                  <span class="text-slate-600">750 pts</span>
+                </div>
+                <div class="w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden">
+                  <div class="bg-slate-400 h-full rounded-full" style="width: 28%;"></div>
+                </div>
+                <div class="flex justify-between items-center text-[10px] text-slate-500 mt-1">
+                  <span>Digitando... (2/7)</span>
+                  <span>4º Lugar</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Dicas de Teclado -->
+            <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+              <span class="font-bold flex items-center gap-1">
+                <span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-[10px]">TAB</span> Próximo
+              </span>
+              <span class="font-bold flex items-center gap-1">
+                <span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-[10px]">ENTER</span> STOP!
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==============================================
+         4. TELA DE VOTAÇÃO E RESULTADO DA RODADA
+    =============================================== -->
+    <section id="screen-vote" class="screen-view">
+      <!-- Cabeçalho da Votação -->
+      <div class="bg-white rounded-3xl p-5 md:p-6 border border-indigo-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-indigo-200">
+            M
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="bg-amber-100 text-amber-800 text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span class="material-symbols-outlined text-xs">how_to_vote</span> FASE DE VALIDAÇÃO
+              </span>
+              <span class="text-xs text-slate-400">• Letra M</span>
+            </div>
+            <h2 class="text-xl md:text-2xl font-black text-slate-900 mt-0.5">Apuração da Rodada 3</h2>
+          </div>
+        </div>
+
+        <div class="bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-2xl flex items-center gap-3">
+          <span class="material-symbols-outlined text-rose-600 text-xl">notifications_active</span>
+          <div class="text-xs">
+            <span class="font-bold text-rose-800">Lucas gritou STOP primeiro!</span>
+            <span class="text-rose-600 block text-[11px]">+10 pts bônus de velocidade</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Abas de Navegação entre Categorias -->
+      <div class="flex items-center gap-2 overflow-x-auto py-4 scrollbar-none" id="vote-category-tabs">
+        <button onclick="switchVoteCategory('nome', this)" class="vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-indigo-600 text-white shadow-sm flex items-center gap-1.5 whitespace-nowrap">
+          <span class="material-symbols-outlined text-base">person</span>
+          <span>1. Nome</span>
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+        </button>
+        <button onclick="switchVoteCategory('cep', this)" class="vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+          <span class="material-symbols-outlined text-base">location_on</span>
+          <span>2. CEP / Lugar</span>
+        </button>
+        <button onclick="switchVoteCategory('animal', this)" class="vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+          <span class="material-symbols-outlined text-base">pets</span>
+          <span>3. Animal</span>
+        </button>
+        <button onclick="switchVoteCategory('fruta', this)" class="vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+          <span class="material-symbols-outlined text-base">nutrition</span>
+          <span>4. Fruta</span>
+        </button>
+        <button onclick="switchVoteCategory('objeto', this)" class="vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+          <span class="material-symbols-outlined text-base">category</span>
+          <span>5. Objeto</span>
+        </button>
+        <button onclick="switchVoteCategory('cor', this)" class="vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+          <span class="material-symbols-outlined text-base">palette</span>
+          <span>6. Cor</span>
+        </button>
+      </div>
+
+      <!-- Layout: Cartões de Palavras Anônimas + Placar Parcial -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Cartões de Palavras Anônimas (2 Cols) -->
+        <div class="lg:col-span-2 space-y-4">
+          
+          <div class="flex items-center justify-between bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-100 text-xs text-indigo-900">
+            <span class="font-bold flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-base text-indigo-600">info</span>
+              Regra de Validação:
+            </span>
+            <span>Toda palavra começa válida (+10 única, +5 repetida). Clique em "Invalidar" apenas se estiver incorreta.</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="vote-cards-container">
+            
+            <!-- Palavra 1 (Exclusiva Válida) -->
+            <div id="card-word-1" class="bg-white rounded-2xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-400">#01</span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-100">Válida por Padrão</span>
+                    <span class="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full">Exclusiva (+10)</span>
+                  </div>
+                </div>
+                <div class="my-4">
+                  <span class="text-xs text-slate-400 font-semibold block uppercase">Palavra Enviada:</span>
+                  <span class="text-2xl font-black text-slate-900 tracking-tight">Matheus</span>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-medium" id="status-card-1">0 contestações</span>
+                <button onclick="toggleContest('card-word-1', 'status-card-1', this)" class="contest-btn text-xs font-bold text-slate-600 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1 transition">
+                  <span class="material-symbols-outlined text-sm">flag</span>
+                  Invalidar / Contestar
+                </button>
+              </div>
+            </div>
+
+            <!-- Palavra 2 (Repetida Válida) -->
+            <div id="card-word-2" class="bg-white rounded-2xl p-5 border border-amber-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-400">#02</span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-full border border-amber-100">Palavra Repetida</span>
+                    <span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full">Duplicada (+5)</span>
+                  </div>
+                </div>
+                <div class="my-4">
+                  <span class="text-xs text-slate-400 font-semibold block uppercase">Palavra Enviada:</span>
+                  <span class="text-2xl font-black text-slate-900 tracking-tight">Marcos</span>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-medium" id="status-card-2">0 contestações</span>
+                <button onclick="toggleContest('card-word-2', 'status-card-2', this)" class="contest-btn text-xs font-bold text-slate-600 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1 transition">
+                  <span class="material-symbols-outlined text-sm">flag</span>
+                  Invalidar / Contestar
+                </button>
+              </div>
+            </div>
+
+            <!-- Palavra 3 (Contestada pela mesa) -->
+            <div id="card-word-3" class="bg-rose-50/50 rounded-2xl p-5 border-2 border-rose-300 shadow-sm flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-400">#03</span>
+                  <span class="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">gavel</span> Contestação Aberta
+                  </span>
+                </div>
+                <div class="my-4">
+                  <span class="text-xs text-rose-500 font-bold block uppercase">Palavra Contestada:</span>
+                  <span class="text-2xl font-black text-rose-700 tracking-tight line-through">Megamente</span>
+                  <p class="text-[11px] text-rose-600 font-medium mt-1">Personagem fictício, não é nome próprio humano.</p>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-rose-100 flex items-center justify-between">
+                <span class="text-xs font-bold text-rose-700">3 de 4 votos para invalidar</span>
+                <button onclick="toggleContest('card-word-3', null, this)" class="bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-sm">
+                  <span class="material-symbols-outlined text-sm">thumb_down</span>
+                  Votado p/ Invalidar
+                </button>
+              </div>
+            </div>
+
+            <!-- Palavra 4 (Em Branco) -->
+            <div class="bg-slate-50 rounded-2xl p-5 border border-dashed border-slate-300 shadow-sm flex flex-col justify-between opacity-75">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-400">#04</span>
+                  <span class="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">0 pts (Sem Resposta)</span>
+                </div>
+                <div class="my-4">
+                  <span class="text-xs text-slate-400 font-semibold block uppercase">Resposta:</span>
+                  <span class="text-xl font-bold text-slate-400 italic">— Em branco —</span>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-slate-200 text-xs text-slate-400 font-medium">
+                Tempo esgotado antes de preencher
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Botões de Avanço de Categoria / Conclusão -->
+          <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+            <button onclick="prevVoteCategory()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 transition">
+              <span class="material-symbols-outlined text-lg">arrow_back</span>
+              Categoria Anterior
+            </button>
+
+            <div class="flex items-center gap-3">
+              <button onclick="nextVoteCategory()" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md shadow-indigo-200 flex items-center gap-1.5 transition">
+                Próxima Categoria (2/7)
+                <span class="material-symbols-outlined text-lg">arrow_forward</span>
+              </button>
+              <button onclick="navigateTo('podium')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md shadow-emerald-200 flex items-center gap-1.5 transition">
+                <span class="material-symbols-outlined text-lg">emoji_events</span>
+                Encerrar e Ver Pódio
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Coluna Lateral: Ranking Parcial da Partida -->
+        <div class="bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm h-fit">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+              <span class="material-symbols-outlined text-amber-500 fill">trophy</span>
+              Classificação Parcial
+            </h3>
+            <span class="text-xs bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded">Rodada 3</span>
+          </div>
+
+          <div class="space-y-3 mt-4">
+            
+            <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-black text-xs flex items-center justify-center">1º</span>
+                <span class="text-xl">🦊</span>
+                <div>
+                  <span class="font-bold text-xs text-slate-900 block">Lucas (Você)</span>
+                  <span class="text-[10px] text-emerald-600 font-bold">+45 pts nesta rodada</span>
+                </div>
+              </div>
+              <span class="font-black text-sm text-slate-900">145 pts</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center">2º</span>
+                <span class="text-xl">🐙</span>
+                <div>
+                  <span class="font-bold text-xs text-slate-900 block">Gabriel</span>
+                  <span class="text-[10px] text-emerald-600 font-bold">+30 pts nesta rodada</span>
+                </div>
+              </div>
+              <span class="font-black text-sm text-slate-900">120 pts</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-6 h-6 rounded-full bg-amber-700 text-white font-black text-xs flex items-center justify-center">3º</span>
+                <span class="text-xl">🦁</span>
+                <div>
+                  <span class="font-bold text-xs text-slate-900 block">Beatriz</span>
+                  <span class="text-[10px] text-emerald-600 font-bold">+25 pts nesta rodada</span>
+                </div>
+              </div>
+              <span class="font-black text-sm text-slate-900">115 pts</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-500 font-bold text-xs flex items-center justify-center">4º</span>
+                <span class="text-xl">🐯</span>
+                <div>
+                  <span class="font-bold text-xs text-slate-900 block">Camila</span>
+                  <span class="text-[10px] text-emerald-600 font-bold">+10 pts nesta rodada</span>
+                </div>
+              </div>
+              <span class="font-black text-sm text-slate-900">80 pts</span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==============================================
+         5. TELA DE FIM DE JOGO E PÓDIO DOS CAMPEÕES
+    =============================================== -->
+    <section id="screen-podium" class="screen-view">
+      <!-- Header Festivo -->
+      <div class="text-center max-w-2xl mx-auto my-4">
+        <div class="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-2">
+          <span class="material-symbols-outlined text-sm fill text-amber-500">trophy</span>
+          PARTIDA FINALIZADA • 5 de 5 Rodadas Concluídas
+        </div>
+        <h2 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight">
+          Fim de Jogo! Temos os <br>
+          <span class="bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-indigo-600 to-rose-500">Campeões do STOP!</span>
+        </h2>
+        <p class="text-slate-500 text-xs md:text-sm mt-2">
+          5 rodadas disputadas • 35 categorias avaliadas • 1 Campeão Supremo no topo do pódio
+        </p>
+      </div>
+
+      <!-- O PÓDIO TRIDIMENSIONAL DOS 3 PRIMEIROS -->
+      <div class="max-w-4xl mx-auto mt-10 mb-12">
+        <div class="grid grid-cols-3 gap-3 md:gap-6 items-end">
+          
+          <!-- 2º LUGAR (Prata) -->
+          <div class="flex flex-col items-center">
+            <div class="relative mb-3 flex flex-col items-center">
+              <span class="text-xs bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full border border-slate-300 mb-1">2º Colocado</span>
+              <div class="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white border-2 border-slate-300 shadow-md flex items-center justify-center text-3xl md:text-4xl">
+                🐙
+              </div>
+              <span class="font-bold text-slate-800 text-sm md:text-base mt-2">Gabriel</span>
+              <span class="text-xs md:text-sm font-black text-indigo-600">215 pts</span>
+              <span class="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded mt-1">Taxa: 88%</span>
+            </div>
+            <!-- Degrau Prata -->
+            <div class="w-full bg-gradient-to-t from-slate-200 to-slate-100 border border-slate-300 rounded-t-2xl p-4 text-center h-36 md:h-44 flex flex-col justify-between shadow-inner">
+              <span class="text-3xl md:text-5xl font-black text-slate-300">2</span>
+              <span class="text-[11px] font-bold text-slate-600 bg-white/70 py-1 rounded-lg">Prata • 4 STOPs</span>
+            </div>
+          </div>
+
+          <!-- 1º LUGAR (Ouro - Campeão Supremo) -->
+          <div class="flex flex-col items-center -mt-8">
+            <div class="relative mb-3 flex flex-col items-center">
+              <span class="material-symbols-outlined text-amber-500 fill text-3xl animate-bounce">crown</span>
+              <span class="text-xs bg-amber-400 text-amber-950 font-black px-3 py-0.5 rounded-full shadow-sm mb-1 uppercase tracking-wider">CAMPEÃO SUPREMO</span>
+              <div class="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-amber-50 border-4 border-amber-400 shadow-xl shadow-amber-200 flex items-center justify-center text-4xl md:text-5xl">
+                🦊
+              </div>
+              <span class="font-black text-slate-900 text-base md:text-lg mt-2">Lucas <span class="text-indigo-600 font-semibold text-xs">(Você)</span></span>
+              <span class="text-sm md:text-lg font-black text-amber-600">240 pts</span>
+              <span class="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded mt-1">94% Precisão</span>
+            </div>
+            <!-- Degrau Ouro -->
+            <div class="w-full bg-gradient-to-t from-amber-200 via-amber-100 to-amber-50 border-2 border-amber-300 rounded-t-3xl p-5 text-center h-48 md:h-60 flex flex-col justify-between shadow-lg">
+              <span class="text-4xl md:text-6xl font-black text-amber-400">1</span>
+              <div>
+                <span class="text-xs font-bold text-amber-900 bg-amber-300/60 px-3 py-1 rounded-full block">Vencedor Supremo</span>
+                <span class="text-[10px] text-amber-800 font-semibold mt-1 block">Liderou 4 das 5 rodadas</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3º LUGAR (Bronze) -->
+          <div class="flex flex-col items-center">
+            <div class="relative mb-3 flex flex-col items-center">
+              <span class="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200 mb-1">3º Colocado</span>
+              <div class="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white border-2 border-amber-300 shadow-md flex items-center justify-center text-3xl md:text-4xl">
+                🦁
+              </div>
+              <span class="font-bold text-slate-800 text-sm md:text-base mt-2">Beatriz</span>
+              <span class="text-xs md:text-sm font-black text-amber-700">195 pts</span>
+              <span class="text-[10px] bg-amber-50 text-amber-800 font-bold px-2 py-0.5 rounded mt-1">11 Únicas</span>
+            </div>
+            <!-- Degrau Bronze -->
+            <div class="w-full bg-gradient-to-t from-orange-100 to-amber-50 border border-amber-200 rounded-t-2xl p-4 text-center h-28 md:h-36 flex flex-col justify-between shadow-inner">
+              <span class="text-3xl md:text-5xl font-black text-amber-200">3</span>
+              <span class="text-[11px] font-bold text-amber-800 bg-white/70 py-1 rounded-lg">Bronze • 2 STOPs</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Destaques Divertidos da Mesa -->
+      <div class="max-w-4xl mx-auto my-8">
+        <h3 class="font-bold text-slate-800 text-base mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-amber-500 fill">stars</span>
+          Destaques Divertidos da Mesa
+        </h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
+            <span class="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">33/35 Válidas</span>
+            <h4 class="font-bold text-slate-800 text-sm mt-2">Dicionário Humano</h4>
+            <p class="text-[11px] text-slate-500 mt-1">Mais respostas aprovadas sem contestação.</p>
+            <div class="flex items-center gap-1.5 mt-3 text-xs font-bold text-indigo-700">
+              <span>🦊</span> Lucas (Você)
+            </div>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
+            <span class="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full">4 Acionamentos</span>
+            <h4 class="font-bold text-slate-800 text-sm mt-2">Dedo Veloz</h4>
+            <p class="text-[11px] text-slate-500 mt-1">Bateu no botão STOP sonoro antes de todos.</p>
+            <div class="flex items-center gap-1.5 mt-3 text-xs font-bold text-indigo-700">
+              <span>🐙</span> Gabriel
+            </div>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
+            <span class="text-[10px] bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-full">5 Votos</span>
+            <h4 class="font-bold text-slate-800 text-sm mt-2">Palavra Criativa</h4>
+            <p class="text-[11px] text-slate-500 mt-1">"Monocromático" em 'Objeto ou Conceito'.</p>
+            <div class="flex items-center gap-1.5 mt-3 text-xs font-bold text-indigo-700">
+              <span>🦁</span> Beatriz
+            </div>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
+            <span class="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded-full">6 Vetos Aceitos</span>
+            <h4 class="font-bold text-slate-800 text-sm mt-2">O Inquisidor</h4>
+            <p class="text-[11px] text-slate-500 mt-1">Jogador com maior número de contestações aceitas.</p>
+            <div class="flex items-center gap-1.5 mt-3 text-xs font-bold text-indigo-700">
+              <span>🐯</span> Camila
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Ações: Revanche / Voltar -->
+      <div class="max-w-4xl mx-auto bg-white rounded-3xl p-6 border border-indigo-100 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h4 class="font-bold text-slate-900 text-base">Quer a revanche agora?</h4>
+          <p class="text-xs text-slate-500">A sala <strong class="text-indigo-600">#STP-9482</strong> continua aberta e aguarda a decisão de todos.</p>
+        </div>
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+          <button onclick="navigateTo('home')" class="flex-1 sm:flex-initial bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded-xl font-bold text-sm transition">
+            Voltar ao Início
+          </button>
+          <button onclick="navigateTo('lobby')" class="flex-1 sm:flex-initial bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md shadow-indigo-300 flex items-center justify-center gap-2 transition">
+            <span class="material-symbols-outlined text-lg">replay</span>
+            Jogar Novamente (Mesma Sala)
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- TOAST DE NOTIFICAÇÃO FLUTUANTE -->
+  <div id="toast-notification" class="fixed top-20 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 opacity-0 pointer-events-none translate-y-2 flex items-center gap-2">
+    <span class="material-symbols-outlined text-emerald-400 text-base">check_circle</span>
+    <span id="toast-message">Mensagem de feedback</span>
+  </div>
+
+  <!-- JAVASCRIPT: MOTOR COMPLETO DE NAVEGAÇÃO E SIMULAÇÃO DE ESTADOS -->
+  <script>
+    // ESTADO GLOBAL DA APLICAÇÃO
+    const appState = {
+      currentScreen: 'home',
+      soundEnabled: true,
+      roomCode: '#STP-9482',
+      nickname: 'CapitãoPalavra',
+      avatar: '🦊',
+      roundsCount: 5,
+      timeLimit: 60,
+      categories: ['Nome', 'CEP / Lugar', 'Animal', 'Cor', 'Fruta / Comida', 'Objeto', 'Marca'],
+      hardLettersBlocked: false,
+      timerSeconds: 42,
+      timerInterval: null
+    };
+
+    // ALFABETO
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const hardLetters = ['K', 'W', 'Y', 'X', 'Z'];
+
+    // 1. NAVEGAÇÃO ENTRE TELAS
+    function navigateTo(screenId) {
+      // Ocultar todas as telas
+      document.querySelectorAll('.screen-view').forEach(s => {
+        s.classList.remove('active');
+      });
+
+      // Mostrar a tela solicitada
+      const targetScreen = document.getElementById(`screen-${screenId}`);
+      if (targetScreen) {
+        targetScreen.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // Atualizar botões de navegação flutuante
+      document.querySelectorAll('.step-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
+        btn.classList.add('text-slate-600', 'hover:bg-slate-100');
+      });
+      const activeBtn = document.getElementById(`nav-btn-${screenId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-600', 'hover:bg-slate-100');
+        activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
+      }
+
+      // Controlar visual do Header
+      const roomBadge = document.getElementById('room-code-badge');
+      if (screenId === 'home') {
+        roomBadge.classList.add('hidden');
+        roomBadge.classList.remove('flex');
+        stopTimer();
+      } else {
+        roomBadge.classList.remove('hidden');
+        roomBadge.classList.add('flex');
+      }
+
+      // Lógica específica por tela
+      if (screenId === 'game') {
+        startTimer();
+      } else {
+        stopTimer();
+      }
+
+      appState.currentScreen = screenId;
+    }
+
+    // 2. CRONÔMETRO DA PARTIDA
+    function startTimer() {
+      stopTimer();
+      appState.timerSeconds = 42;
+      updateTimerDisplay();
+      appState.timerInterval = setInterval(() => {
+        if (appState.timerSeconds > 0) {
+          appState.timerSeconds--;
+          updateTimerDisplay();
+        } else {
+          stopTimer();
+          showToast('Tempo esgotado! Indo para apuração.');
+          setTimeout(() => navigateTo('vote'), 1000);
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (appState.timerInterval) {
+        clearInterval(appState.timerInterval);
+        appState.timerInterval = null;
+      }
+    }
+
+    function updateTimerDisplay() {
+      const timerEl = document.getElementById('game-timer');
+      if (!timerEl) return;
+      const mins = Math.floor(appState.timerSeconds / 60).toString().padStart(2, '0');
+      const secs = (appState.timerSeconds % 60).toString().padStart(2, '0');
+      timerEl.textContent = `${mins}:${secs}`;
+    }
+
+    // 3. AÇÃO DE BATER O STOP
+    function triggerStopAction() {
+      stopTimer();
+      playBeep();
+      showToast('🛑 VOCÊ BATEU STOP! Congelando rodada...');
+      setTimeout(() => {
+        navigateTo('vote');
+      }, 900);
+    }
+
+    // 4. CATEGORIAS NO LOBBY
+    function renderCategories() {
+      const container = document.getElementById('categories-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      appState.categories.forEach((cat, index) => {
+        const tag = document.createElement('div');
+        tag.className = 'flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition';
+        tag.innerHTML = `
+          <span class="text-indigo-600 font-extrabold">${(index + 1).toString().padStart(2, '0')}</span>
+          <span>${cat}</span>
+          <button onclick="removeCategory(${index})" class="text-slate-400 hover:text-rose-500 ml-1">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        `;
+        container.appendChild(tag);
+      });
+
+      // Atualizar preview na home
+      const previewEl = document.getElementById('home-categories-preview');
+      if (previewEl) {
+        previewEl.textContent = appState.categories.slice(0, 5).join(', ') + ` (${appState.categories.length})`;
+      }
+    }
+
+    function addCustomCategory() {
+      const input = document.getElementById('new-cat-input');
+      if (!input || !input.value.trim()) return;
+      const name = input.value.trim();
+      appState.categories.push(name);
+      input.value = '';
+      renderCategories();
+      showToast(`Categoria "${name}" adicionada!`);
+    }
+
+    function removeCategory(index) {
+      if (appState.categories.length <= 4) {
+        showToast('Mantenha pelo menos 4 categorias para a partida.');
+        return;
+      }
+      const removed = appState.categories.splice(index, 1);
+      renderCategories();
+      showToast(`Categoria "${removed[0]}" removida.`);
+    }
+
+    function loadCategoryPack(type) {
+      if (type === 'classico') {
+        appState.categories = ['Nome', 'CEP / Lugar', 'Animal', 'Cor', 'Fruta', 'Objeto', 'Marca'];
+      } else if (type === 'geek') {
+        appState.categories = ['Personagem Pop', 'Filme / Série', 'Jogo / Game', 'Poder / Magia', 'Vilão Fictício', 'Item Geek'];
+      } else if (type === 'expert') {
+        appState.categories = ['País ou Capital', 'Profissão Rara', 'Instrumento Musical', 'Termo Científico', 'Obra de Arte', 'Comida Típica'];
+      }
+      renderCategories();
+      showToast(`Pacote ${type.toUpperCase()} carregado!`);
+    }
+
+    // 5. ALFABETO E BLOQUEIO DE LETRAS
+    function renderAlphabet() {
+      const container = document.getElementById('alphabet-grid');
+      if (!container) return;
+      container.innerHTML = '';
+
+      alphabet.forEach(letter => {
+        const isHard = hardLetters.includes(letter);
+        const isBlocked = isHard && appState.hardLettersBlocked;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = letter;
+        btn.className = `letter-badge h-9 rounded-lg text-xs font-bold border transition ${
+          isBlocked 
+            ? 'bg-slate-100 text-slate-300 border-slate-200 line-through cursor-not-allowed'
+            : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50'
+        }`;
+        
+        btn.onclick = () => {
+          btn.classList.toggle('line-through');
+          btn.classList.toggle('text-slate-300');
+          btn.classList.toggle('bg-slate-100');
+        };
+
+        container.appendChild(btn);
+      });
+    }
+
+    function toggleHardLetters() {
+      appState.hardLettersBlocked = !appState.hardLettersBlocked;
+      renderAlphabet();
+      showToast(appState.hardLettersBlocked ? 'Letras difíceis bloqueadas!' : 'Todas as letras liberadas!');
+    }
+
+    // 6. ESCOLHAS DO FORMULÁRIO (AVATAR, RODADAS, TEMPO)
+    function selectAvatar(emoji, btn) {
+      appState.avatar = emoji;
+      document.querySelectorAll('.avatar-option').forEach(b => {
+        b.classList.remove('bg-indigo-100', 'border-indigo-600');
+        b.classList.add('bg-slate-100', 'border-transparent');
+      });
+      btn.classList.add('bg-indigo-100', 'border-indigo-600');
+      btn.classList.remove('border-transparent');
+      document.getElementById('header-player-pill').querySelector('span:first-child').textContent = emoji;
+    }
+
+    function randomAvatar(btn) {
+      const list = ['🦊', '🐙', '🐵', '🦁', '🐯', '🐼', '🐨', '🐸', '🦄'];
+      const pick = list[Math.floor(Math.random() * list.length)];
+      appState.avatar = pick;
+      document.getElementById('header-player-pill').querySelector('span:first-child').textContent = pick;
+      showToast(`Avatar alterado para ${pick}`);
+    }
+
+    function selectRoundCount(count, btn) {
+      appState.roundsCount = count;
+      document.querySelectorAll('.round-opt').forEach(b => {
+        b.className = 'round-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-indigo-400 bg-slate-50 text-slate-700';
+      });
+      btn.className = 'round-opt py-2 rounded-xl text-sm font-bold border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm';
+    }
+
+    function selectTimeCount(seconds, btn) {
+      appState.timeLimit = seconds;
+      document.querySelectorAll('.time-opt').forEach(b => {
+        b.className = 'time-opt py-2 rounded-xl text-sm font-bold border border-slate-200 hover:border-rose-400 bg-slate-50 text-slate-700';
+      });
+      btn.className = 'time-opt py-2 rounded-xl text-sm font-bold border-2 border-rose-500 bg-rose-500 text-white shadow-sm';
+    }
+
+    // 7. AÇÕES DE ENTRADA / CRIAÇÃO
+    function actionCreateRoom() {
+      const nickInput = document.getElementById('create-nickname');
+      if (nickInput && nickInput.value.trim()) {
+        appState.nickname = nickInput.value.trim();
+        document.getElementById('header-player-name').textContent = appState.nickname;
+      }
+      showToast('Sala privada criada com sucesso!');
+      navigateTo('lobby');
+    }
+
+    function actionJoinRoom() {
+      const joinNick = document.getElementById('join-nickname');
+      if (joinNick && joinNick.value.trim()) {
+        appState.nickname = joinNick.value.trim();
+        document.getElementById('header-player-name').textContent = appState.nickname;
+      }
+      showToast('Conectando à sala #STP-9482...');
+      setTimeout(() => navigateTo('lobby'), 400);
+    }
+
+    // 8. INTERAÇÕES NA VOTAÇÃO (CONTESTAÇÃO ANONIMA)
+    function toggleContest(cardId, statusId, btn) {
+      const card = document.getElementById(cardId);
+      if (!card) return;
+      const isContested = card.dataset.contested === 'true';
+
+      if (!isContested) {
+        card.dataset.contested = 'true';
+        card.classList.add('bg-rose-50/50', 'border-rose-300');
+        btn.classList.remove('bg-slate-50', 'text-slate-600');
+        btn.classList.add('bg-rose-600', 'text-white');
+        btn.innerHTML = `<span class="material-symbols-outlined text-sm">thumb_down</span> Seu voto computado`;
+        if (statusId) {
+          document.getElementById(statusId).textContent = '1 contestação (Você)';
+        }
+        showToast('Voto para invalidar registrado com sucesso.');
+      } else {
+        card.dataset.contested = 'false';
+        card.classList.remove('bg-rose-50/50', 'border-rose-300');
+        btn.classList.add('bg-slate-50', 'text-slate-600');
+        btn.classList.remove('bg-rose-600', 'text-white');
+        btn.innerHTML = `<span class="material-symbols-outlined text-sm">flag</span> Invalidar / Contestar`;
+        if (statusId) {
+          document.getElementById(statusId).textContent = '0 contestações';
+        }
+        showToast('Contestação desfeita.');
+      }
+    }
+
+    function switchVoteCategory(catKey, btn) {
+      document.querySelectorAll('.vote-tab').forEach(t => {
+        t.className = 'vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap';
+      });
+      btn.className = 'vote-tab px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-indigo-600 text-white shadow-sm flex items-center gap-1.5 whitespace-nowrap';
+      showToast(`Validando categoria: ${catKey.toUpperCase()}`);
+    }
+
+    function nextVoteCategory() {
+      showToast('Avançando para validação de CEP / Lugar...');
+    }
+
+    function prevVoteCategory() {
+      showToast('Retornando para categoria anterior.');
+    }
+
+    // 9. CONTADOR DE RESPOSTAS PREENCHIDAS NA PARTIDA
+    function updateFilledCounter() {
+      const inputs = document.querySelectorAll('.game-field');
+      let filled = 0;
+      inputs.forEach(input => {
+        if (input.value.trim().length > 0) filled++;
+      });
+      const badge = document.getElementById('filled-count-badge');
+      if (badge) {
+        badge.textContent = `${filled} de ${inputs.length} Preenchidas`;
+      }
+      const progressBar = document.getElementById('player-progress-bar');
+      if (progressBar) {
+        progressBar.style.width = `${Math.round((filled / inputs.length) * 100)}%`;
+      }
+    }
+
+    function rerollLetter() {
+      const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'L', 'M', 'P', 'R', 'S', 'T'];
+      const random = letters[Math.floor(Math.random() * letters.length)];
+      document.getElementById('round-letter-display').textContent = random;
+      document.getElementById('current-letter-lbl').textContent = random;
+      showToast(`Nova letra sorteada: ${random}!`);
+    }
+
+    // 10. UTILITÁRIOS: CLIPBOARD, ÁUDIO, NOTIFICAÇÕES
+    function copyRoomLink() {
+      navigator.clipboard?.writeText(window.location.href);
+      showToast('Link da sala copiado para a área de transferência!');
+    }
+
+    function pasteRoomCode() {
+      showToast('Código STP-948 inserido automaticamente!');
+    }
+
+    function toggleAudio() {
+      appState.soundEnabled = !appState.soundEnabled;
+      const icon = document.getElementById('audio-icon');
+      if (appState.soundEnabled) {
+        icon.textContent = 'volume_up';
+        showToast('Efeitos sonoros ativados');
+      } else {
+        icon.textContent = 'volume_off';
+        showToast('Efeitos sonoros mutados');
+      }
+    }
+
+    function playBeep() {
+      if (!appState.soundEnabled) return;
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        // Fallback silencioso se Web Audio estiver bloqueado
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notification');
+      const text = document.getElementById('toast-message');
+      if (!toast || !text) return;
+
+      text.textContent = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+      }, 2600);
+    }
+
+    // SUPORTE AO TECLADO (ENTER PARA STOP)
+    window.addEventListener('keydown', (e) => {
+      if (appState.currentScreen === 'game' && e.key === 'Enter') {
+        triggerStopAction();
+      }
+    });
+
+    // INICIALIZAÇÃO
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCategories();
+      renderAlphabet();
+      updateFilledCounter();
+    });
+  </script>
+</body>
+</html>

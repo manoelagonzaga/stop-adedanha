@@ -30,24 +30,30 @@ Construir um jogo Stop multiplayer para até 20 participantes por sala, com cód
 
 ## UX and Accessibility Direction
 
-The supplied prototype establishes the visual direction for the implementation: a light warm
+The supplied prototype and updated rules establish the visual direction for the implementation: a light warm
 background, large soft geometric forms with slow ambient motion, elevated light surfaces, navy
 primary actions, orange emphasis for the drawn letter and leading player, compact uppercase labels,
-and a clear linear hierarchy from room entry to active round and results.
+and a clear linear hierarchy from room entry to active round, sequential review, and final results.
 
-The round screen MUST expose the drawn letter, round number, configured round count, categories,
-answers, timer, Stop action, review actions, and ranking in a logical DOM order. Visible animation
-MUST never be the only state signal. The letter draw and Stop transition MAY animate, while
-`prefers-reduced-motion: reduce` MUST simplify or remove those animations and the decorative
-background movement. Status changes MUST be announced through accessible text/live regions without
-stealing focus.
+Key UX & Layout Directives:
+1. **Room Configuration (Lobby):** The scoreboard and the player list MUST NOT be displayed on this screen, as this data is not yet consolidated prior to match start. Focus remains exclusively on room code, round quantity, category management, and the Start Game action.
+2. **Active Round Screen:**
+   - The **STOP button MUST be positioned immediately after the categories section**.
+   - The **drawn letter MUST be positioned on the right side, directly above the scoreboard section**.
+   - Main content (left column on desktop) houses round header, timer, category input form, followed by the STOP button.
+3. **Sequential Category-by-Category Review:**
+   - Validation occurs **one category at a time**.
+   - For each active category, all submitted terms are displayed simultaneously for peer invalidation.
+   - When all players finish voting or the category timer expires, points for that category are computed and consolidated.
+   - During the entire category evaluation phase, the **scoreboard MUST remain on the right side, reflecting the calculated scores in real time**.
+   - The system automatically transitions to the next category until all categories of the round have been validated.
+4. **Final Results Screen:**
+   - The **scoreboard MUST be prominently centered** on the screen (not relegated to a sidebar).
+   - The **1st, 2nd, and 3rd place players MUST be highlighted in a podium format** (gold, silver, bronze).
+   - Remaining participants (4th place onward) MUST be displayed in a clean list format below the podium.
+   - **All positions (podium and list) MUST display the total points** accumulated by the participant.
 
-On wide layouts, the scoreboard MUST occupy a vertical sidebar of approximately 25% of the available
-width, with the active game using the remaining space. On narrow layouts, the scoreboard MUST move
-below the current game content in the same logical order, without overlap or horizontal scrolling.
-
-The lobby MUST include a labeled numeric control for the host to define the number of rounds before
-starting. The configured value MUST be visible to all players and immutable after the first round.
+Visible animation MUST never be the only state signal. The letter draw, Stop transition, category progression, and podium reveal MAY animate, while `prefers-reduced-motion: reduce` MUST simplify or remove those animations and decorative background movement. Status changes MUST be announced through accessible text/live regions without stealing focus.
 
 ## Prototype Alignment
 

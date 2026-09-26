@@ -5,5 +5,15 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: './'
+  base: './',
+  server: {
+    proxy: {
+      // Proxy all /rooms/* requests (REST + WebSocket) to the local Wrangler dev server
+      '/rooms': {
+        target: 'http://localhost:8787',
+        ws: true,
+        changeOrigin: true,
+      },
+    },
+  },
 })
