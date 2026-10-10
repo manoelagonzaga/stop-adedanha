@@ -47,6 +47,7 @@ export function LobbyScreen({
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
   const categoryNames = room.categories.map((c: Category) => c.name);
+  let selectedPack = '';
   const roundTime = room.roundDurationSeconds ?? 60;
   const allowedLetters = room.allowedLetters ?? ALL_LETTERS;
   const excludedLetters = ALL_LETTERS.filter((letter) => !allowedLetters.includes(letter));
@@ -74,6 +75,7 @@ export function LobbyScreen({
 
   function handleLoadPack(packName: keyof typeof CATEGORY_PACKS) {
     if (!canEditLobby) return;
+    selectedPack = packName;
     const pack = CATEGORY_PACKS[packName];
     onUpdateCategories(pack);
   }
@@ -154,7 +156,7 @@ export function LobbyScreen({
         <div>
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
-              <span className="material-symbols-outlined fill text-xs">star</span>
+              <span aria-hidden="true" className="material-symbols-outlined fill text-xs">star</span>
               {isHost ? 'VOCÊ É O HOST' : hasActiveHost ? 'CONVIDADO' : 'SEM ANFITRIÃO ATIVO'}
             </span>
             <span className="text-xs text-slate-400">•</span>
@@ -257,6 +259,7 @@ export function LobbyScreen({
                     key={count}
                     type="button"
                     disabled={!canEditLobby}
+                    aria-pressed={room.totalRounds === count}
                     onClick={() => handleSelectRounds(count)}
                     className={`py-2 rounded-xl text-sm font-bold transition ${
                       room.totalRounds === count
@@ -307,7 +310,7 @@ export function LobbyScreen({
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Categorias da Partida</h2>
                 <p className="text-xs text-slate-500">
-                  Escolha de 1 a 20 categorias. Os nomes devem ser únicos e ter até 40 pontos de código Unicode.
+                  Escolha de 1 a 20 categorias. Os nomes devem ser únicos e ter até 40 caracteres.
                 </p>
               </div>
             </div>
@@ -316,6 +319,7 @@ export function LobbyScreen({
                 <span className="font-medium text-slate-400">Packs:</span>
                 <button
                   type="button"
+                  aria-pressed={selectedPack === 'classico'}
                   onClick={() => handleLoadPack('classico')}
                   className="rounded-lg bg-indigo-50 px-2.5 py-1 font-bold text-indigo-700 transition hover:bg-indigo-100"
                 >
@@ -323,6 +327,7 @@ export function LobbyScreen({
                 </button>
                 <button
                   type="button"
+                  aria-pressed={selectedPack === 'geek'}
                   onClick={() => handleLoadPack('geek')}
                   className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-700 transition hover:bg-slate-200"
                 >
@@ -330,6 +335,7 @@ export function LobbyScreen({
                 </button>
                 <button
                   type="button"
+                  aria-pressed={selectedPack === 'expert'}
                   onClick={() => handleLoadPack('expert')}
                   className="rounded-lg bg-rose-50 px-2.5 py-1 font-bold text-rose-700 transition hover:bg-rose-100"
                 >
