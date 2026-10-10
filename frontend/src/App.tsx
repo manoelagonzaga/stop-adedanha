@@ -12,6 +12,9 @@ import type { ClientCommand, RoomState } from './types';
 
 
 const backendBaseUrl = getBackendBaseUrl(import.meta.env.VITE_BACKEND_URL, location.origin);
+const requestedRoomCode = new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase();
+const invitedRoomCode =
+  requestedRoomCode && /^[A-Z2-9]{6}$/.test(requestedRoomCode) ? requestedRoomCode : null;
 
 type UIScreen = 'início' | 'configuração' | 'jogo' | 'resultado' | 'pódio';
 type LobbyActionStatus = {
@@ -50,6 +53,20 @@ export default function App() {
 
   const { state, setState, handleEvent, trackCommand } = useGameState();
 
+  const settleStartCommand = useCallback(() => {
+    for (const [requestId, commandType] of lobbyPendingRequestIds.current) {
+      if (commandType !== 'game:start') continue;
+      lobbyPendingRequestIds.current.delete(requestId);
+      const timeout = lobbyRequestTimeouts.current.get(requestId);
+      if (timeout) clearTimeout(timeout);
+      lobbyRequestTimeouts.current.delete(requestId);
+      setLobbyActionStatus({
+        status: 'confirmed',
+        message: 'Partida iniciada pelo servidor.',
+      });
+    }
+  }, []);
+
   const onEvent = useCallback(
     (event: import('./types').ServerEvent) => {
       handleEvent(event);
@@ -65,12 +82,16 @@ export default function App() {
         setIsRoomPending(false);
         setReconnectError(null);
         const phase = event.state.phase;
+        if (phase === 'ROUND_ACTIVE') settleStartCommand();
         if (phase === 'CONFIGURING' || phase === 'WAITING_PLAYERS') setScreen('configuração');
         else if (phase === 'ROUND_ACTIVE') setScreen('jogo');
         else if (phase === 'CATEGORY_REVIEW' || phase === 'ROUND_RESULTS') setScreen('resultado');
         else if (phase === 'GAME_OVER') setScreen('pódio');
       }
-      if (event.type === 'round:started') setScreen('jogo');
+      if (event.type === 'round:started') {
+        settleStartCommand();
+        setScreen('jogo');
+      }
       if (event.type === 'round:review:category') setScreen('resultado');
       if (event.type === 'game:final_results') setScreen('pódio');
       if (event.type === 'session:resumed') setReconnectError(null);
@@ -139,7 +160,7 @@ export default function App() {
         pendingCommandRef.current = null;
       }
     },
-    [handleEvent]
+    [handleEvent, settleStartCommand]
   );
 
   const { status, send } = useGameSocket({
@@ -429,6 +450,7 @@ export default function App() {
           onCreateRoom={handleCreateRoom}
           error={entryError}
           isLoading={isRoomPending}
+          initialRoomCode={invitedRoomCode}
         />
       )}
 

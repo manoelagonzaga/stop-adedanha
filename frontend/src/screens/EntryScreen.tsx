@@ -6,6 +6,7 @@ interface EntryScreenProps {
   onCreateRoom: (nickname: string) => void | Promise<void>;
   error?: string | null;
   isLoading?: boolean;
+  initialRoomCode?: string | null;
 }
 
 const AVATAR_OPTIONS = ['🦊', '🐙', '🐵', '🦁', '🐯', '🐼', '🐨', '🐸', '🦄'];
@@ -15,6 +16,7 @@ export function EntryScreen({
   onCreateRoom,
   error,
   isLoading = false,
+  initialRoomCode = null,
 }: EntryScreenProps) {
   const { showToast } = useToast();
 
@@ -23,7 +25,12 @@ export function EntryScreen({
   const [selectedAvatar, setSelectedAvatar] = useState('🦊');
 
   // 6-digit PIN state
-  const [pinDigits, setPinDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [pinDigits, setPinDigits] = useState<string[]>(() => {
+    const normalizedCode = initialRoomCode?.trim().toUpperCase();
+    return normalizedCode && /^[A-Z2-9]{6}$/.test(normalizedCode)
+      ? [...normalizedCode]
+      : ['', '', '', '', '', ''];
+  });
   const pinInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   function handleDigitChange(index: number, value: string) {
@@ -254,6 +261,7 @@ export function EntryScreen({
                     onChange={(e) => setJoinNick(e.target.value)}
                     placeholder="Ex: Veloz99"
                     maxLength={24}
+                    autoFocus={initialRoomCode !== null}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-4 pl-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-rose-500 focus:bg-white"
                   />
                 </div>

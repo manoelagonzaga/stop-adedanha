@@ -96,4 +96,60 @@ describe('App server-backed screens', () => {
     expect(screen.getByRole('heading', { name: /Grite STOP primeiro/ })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Placar/ })).not.toBeInTheDocument();
   });
+
+  it('treats the authoritative round-start event as confirmation of the start action', async () => {
+    vi.stubGlobal('WebSocket', AppWebSocket);
+    vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'request-id') });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'ABC234' }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    render(
+      <ToastProvider>
+        <App />
+      </ToastProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Seu Apelido no Jogo'), { target: { value: 'Host' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Criar Sala e Convidar Amigos/ }));
+    });
+    const socket = AppWebSocket.instances[0];
+    act(() => socket.onopen?.(new Event('open')));
+    act(() => socket.emit({ type: 'session:ready', negotiatedProtocolVersion: 1, playerId: 'host-id' }));
+    const createCommand = JSON.parse(socket.sent[socket.sent.length - 1]);
+    expect(createCommand.type).toBe('room:create');
+
+    const host = { id: 'host-id', nickname: 'Host', isHost: true, status: 'active', score: 0 };
+    const guest = { id: 'guest-id', nickname: 'Guest', isHost: false, status: 'active', score: 0 };
+    const categories = [{ id: 'cat-0', name: 'Nome' }];
+    act(() => socket.emit({
+      type: 'room:state',
+      state: {
+        code: 'ABC234',
+        phase: 'CONFIGURING',
+        players: [host, guest],
+        categories,
+        currentRound: 0,
+        totalRounds: 3,
+        roundDurationSeconds: 60,
+        allowedLetters: ['A'],
+      },
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar Partida$/ }));
+    expect(JSON.parse(socket.sent[socket.sent.length - 1]).type).toBe('game:start');
+    expect(screen.getByText('Aguardando confirmação do servidor...')).toBeInTheDocument();
+
+    act(() => socket.emit({
+      type: 'round:started',
+      id: 'round-1',
+      roundNumber: 1,
+      letter: 'A',
+      categories,
+    }));
+
+    expect(screen.getByRole('heading', { name: 'Rodada 1 de 3' })).toBeInTheDocument();
+    expect(screen.queryByText('Aguardando confirmação do servidor...')).not.toBeInTheDocument();
+  });
 });
