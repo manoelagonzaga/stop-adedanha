@@ -28,6 +28,7 @@ npm run start
 ```
 
 Open the Vite URL printed in the terminal. The frontend reads `VITE_BACKEND_URL` from the mode-specific `.env` file and sends HTTP and WebSocket requests directly to that backend origin; the default development value is `http://127.0.0.1:8787`.
+For deployments where frontend and backend use different hosts, set `VITE_BACKEND_URL` to the backend's full `http(s)` origin before building the frontend. The backend must allow the frontend origin for HTTP requests and accept WebSocket connections.
 
 ## Automated checks
 

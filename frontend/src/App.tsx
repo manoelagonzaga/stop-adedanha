@@ -41,6 +41,12 @@ export default function App() {
   const pendingCommandRef = useRef<(() => void) | null>(null);
   const pendingRoomRequestIdRef = useRef<string | null>(null);
   const lobbyPendingRequestIds = useRef(new Map<string, ClientCommand['type']>());
+  const lobbyRequestTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  useEffect(() => () => {
+    for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
+    lobbyRequestTimeouts.current.clear();
+  }, []);
 
   const { state, setState, handleEvent, trackCommand } = useGameState();
 
@@ -79,6 +85,9 @@ export default function App() {
 
       if (event.type === 'command:ack' && lobbyCommandType) {
         lobbyPendingRequestIds.current.delete(event.requestId);
+        const timeout = lobbyRequestTimeouts.current.get(event.requestId);
+        if (timeout) clearTimeout(timeout);
+        lobbyRequestTimeouts.current.delete(event.requestId);
         setLobbyActionStatus({
           status: 'confirmed',
           message: lobbyCommandType === 'game:start'
@@ -88,6 +97,9 @@ export default function App() {
       }
       if (event.type === 'error' && lobbyCommandType) {
         lobbyPendingRequestIds.current.delete(event.requestId!);
+        const timeout = lobbyRequestTimeouts.current.get(event.requestId!);
+        if (timeout) clearTimeout(timeout);
+        lobbyRequestTimeouts.current.delete(event.requestId!);
         setLobbyActionStatus({ status: 'rejected', message: event.message });
       }
 
@@ -151,9 +163,23 @@ export default function App() {
 
   function sendLobbyCommand(command: ClientCommand): void {
     setLobbyActionStatus({ status: 'pending', message: 'Aguardando confirmação do servidor...' });
+    lobbyPendingRequestIds.current.set(command.requestId, command.type);
+    const timeout = setTimeout(() => {
+      if (!lobbyPendingRequestIds.current.delete(command.requestId)) return;
+      lobbyRequestTimeouts.current.delete(command.requestId);
+      setLobbyActionStatus({
+        status: 'rejected',
+        message: 'O servidor não confirmou a alteração. Verifique a conexão e tente novamente.',
+      });
+    }, 15_000);
+    lobbyRequestTimeouts.current.set(command.requestId, timeout);
+
     if (sendCommand(command)) {
-      lobbyPendingRequestIds.current.set(command.requestId, command.type);
+      return;
     } else {
+      clearTimeout(timeout);
+      lobbyRequestTimeouts.current.delete(command.requestId);
+      lobbyPendingRequestIds.current.delete(command.requestId);
       setLobbyActionStatus({
         status: 'rejected',
         message: 'Ação não enviada. Verifique sua conexão e tente novamente.',
@@ -293,6 +319,8 @@ export default function App() {
     pendingCommandRef.current = null;
     pendingRoomRequestIdRef.current = null;
     lobbyPendingRequestIds.current.clear();
+    for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
+    lobbyRequestTimeouts.current.clear();
     setState(createEmptyGameState());
     setScreen('início');
   }
@@ -365,6 +393,8 @@ export default function App() {
               pendingCommandRef.current = null;
               pendingRoomRequestIdRef.current = null;
               lobbyPendingRequestIds.current.clear();
+              for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
+              lobbyRequestTimeouts.current.clear();
               setState(createEmptyGameState());
               setScreen('início');
             }}
