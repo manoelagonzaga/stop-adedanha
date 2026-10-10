@@ -134,7 +134,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
         <div className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between px-1">
             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <span className="material-symbols-outlined text-indigo-600">edit_note</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-indigo-600">edit_note</span>
               Preencha com a Letra{' '}
               <span className="font-black text-xl text-indigo-600">{currentLetter}</span>
             </h2>
@@ -209,7 +209,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
               disabled={isStopped}
               className="animate-stop-btn flex items-center gap-3 rounded-2xl bg-rose-600 px-8 py-4 text-xl font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
             >
-              <span className="material-symbols-outlined text-3xl">pan_tool</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-3xl">pan_tool</span>
               Gritar STOP!
             </button>
           </div>

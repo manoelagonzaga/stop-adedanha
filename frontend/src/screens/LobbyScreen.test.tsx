@@ -12,8 +12,8 @@ describe('LobbyScreen authoritative options', () => {
       code: 'ABC234',
       phase: 'CONFIGURING',
       players: [
-        { id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0 },
-        { id: 'guest-2', nickname: 'Guest', isHost: false, status: 'active', score: 0 },
+        { id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0, avatar: '🦊' },
+        { id: 'guest-2', nickname: 'Guest', isHost: false, status: 'active', score: 0, avatar: '🐼' },
         { id: 'guest-3', nickname: 'Offline', isHost: false, status: 'disconnected', score: 0 },
       ],
       categories: [{ id: 'cat-0', name: 'Nome' }],
@@ -35,9 +35,10 @@ describe('LobbyScreen authoritative options', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Participantes da sala' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copiar Link da Sala' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copiar Link da Sala #ABC234' })).toBeInTheDocument();
     expect(screen.getByText('2 de 20 participantes conectados')).toBeInTheDocument();
     expect(screen.getByText('Guest')).toBeInTheDocument();
+    expect(screen.getByText('🐼')).toBeInTheDocument();
     expect(screen.getByText('Offline')).toBeInTheDocument();
     expect(screen.getByText('Desconectado')).toBeInTheDocument();
   });

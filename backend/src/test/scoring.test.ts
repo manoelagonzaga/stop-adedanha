@@ -307,7 +307,7 @@ describe('resolveInvalidation', () => {
 describe('buildFinalRanking', () => {
   it('assigns gold/silver/bronze tiers to top 3', () => {
     const players = [
-      { id: 'p1', nickname: 'Ana', score: 100 },
+      { id: 'p1', nickname: 'Ana', score: 100, avatar: '🐼' as const },
       { id: 'p2', nickname: 'Bruno', score: 80 },
       { id: 'p3', nickname: 'Carla', score: 60 },
       { id: 'p4', nickname: 'Diego', score: 40 },
@@ -315,7 +315,13 @@ describe('buildFinalRanking', () => {
     const { podium, list } = buildFinalRanking(players);
 
     expect(podium).toHaveLength(3);
-    expect(podium[0]).toMatchObject({ tier: 'gold', position: 1, nickname: 'Ana', score: 100 });
+    expect(podium[0]).toMatchObject({
+      tier: 'gold',
+      position: 1,
+      nickname: 'Ana',
+      score: 100,
+      avatar: '🐼',
+    });
     expect(podium[1]).toMatchObject({ tier: 'silver', position: 2, nickname: 'Bruno', score: 80 });
     expect(podium[2]).toMatchObject({ tier: 'bronze', position: 3, nickname: 'Carla', score: 60 });
 

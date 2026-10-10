@@ -155,7 +155,9 @@ export interface FinalRanking {
 /**
  * Builds the podium (top 3) and remainder list sorted by total score descending.
  */
-export function buildFinalRanking(players: Pick<Player, 'id' | 'nickname' | 'score'>[]): FinalRanking {
+export function buildFinalRanking(
+  players: Pick<Player, 'id' | 'nickname' | 'score' | 'avatar'>[],
+): FinalRanking {
   const sorted = [...players].sort((a, b) => b.score - a.score);
   const top3 = sorted.slice(0, 3);
   const rest = sorted.slice(3);
@@ -168,6 +170,7 @@ export function buildFinalRanking(players: Pick<Player, 'id' | 'nickname' | 'sco
     nickname: p.nickname,
     score: p.score,
     tier: tiers[i],
+    avatar: p.avatar,
   }));
 
   const list: RankingListItem[] = rest.map((p, i) => ({
@@ -175,6 +178,7 @@ export function buildFinalRanking(players: Pick<Player, 'id' | 'nickname' | 'sco
     playerId: p.id,
     nickname: p.nickname,
     score: p.score,
+    avatar: p.avatar,
   }));
 
   return { podium, list };

@@ -82,6 +82,7 @@ describe('App server-backed screens', () => {
       type: 'room:join',
       requestId: 'request-1',
       code: 'ABC234',
+      avatar: '🦊',
     });
 
     act(() => socket.emit({
@@ -118,7 +119,10 @@ describe('App server-backed screens', () => {
     act(() => socket.onopen?.(new Event('open')));
     act(() => socket.emit({ type: 'session:ready', negotiatedProtocolVersion: 1, playerId: 'host-id' }));
     const createCommand = JSON.parse(socket.sent[socket.sent.length - 1]);
-    expect(createCommand.type).toBe('room:create');
+    expect(createCommand).toMatchObject({
+      type: 'room:create',
+      avatar: '🦊',
+    });
 
     const host = { id: 'host-id', nickname: 'Host', isHost: true, status: 'active', score: 0 };
     const guest = { id: 'guest-id', nickname: 'Guest', isHost: false, status: 'active', score: 0 };

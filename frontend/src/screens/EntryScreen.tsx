@@ -1,15 +1,14 @@
 import { useState, useRef } from 'react';
+import { AVATAR_OPTIONS, type Avatar } from '../../../shared/types';
 import { useToast } from '../components/Toast';
 
 interface EntryScreenProps {
-  onEnterRoom: (nickname: string, roomCode: string) => void;
-  onCreateRoom: (nickname: string) => void | Promise<void>;
+  onEnterRoom: (nickname: string, roomCode: string, avatar: Avatar) => void;
+  onCreateRoom: (nickname: string, avatar: Avatar) => void | Promise<void>;
   error?: string | null;
   isLoading?: boolean;
   initialRoomCode?: string | null;
 }
-
-const AVATAR_OPTIONS = ['🦊', '🐙', '🐵', '🦁', '🐯', '🐼', '🐨', '🐸', '🦄'];
 
 export function EntryScreen({
   onEnterRoom,
@@ -22,7 +21,7 @@ export function EntryScreen({
 
   const [createNick, setCreateNick] = useState('');
   const [joinNick, setJoinNick] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState('🦊');
+  const [selectedAvatar, setSelectedAvatar] = useState<Avatar>(AVATAR_OPTIONS[0]);
 
   // 6-digit PIN state
   const [pinDigits, setPinDigits] = useState<string[]>(() => {
@@ -83,7 +82,7 @@ export function EntryScreen({
       showToast('Por favor, informe seu apelido.');
       return;
     }
-    void onCreateRoom(nick);
+    void onCreateRoom(nick, selectedAvatar);
   }
 
   function handleActionJoin() {
@@ -97,7 +96,7 @@ export function EntryScreen({
       showToast('Digite os 6 caracteres do código da sala.');
       return;
     }
-    onEnterRoom(nick, code);
+    onEnterRoom(nick, code, selectedAvatar);
   }
 
   return (
@@ -139,7 +138,7 @@ export function EntryScreen({
           <div>
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200" aria-hidden="true">
                   <span className="material-symbols-outlined text-2xl">add_circle</span>
                 </div>
                 <div>
@@ -159,7 +158,7 @@ export function EntryScreen({
                   Seu Apelido no Jogo
                 </label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute top-1/2 left-3.5 -translate-y-1/2 text-lg text-slate-400">
+                  <span aria-hidden="true" className="material-symbols-outlined absolute top-1/2 left-3.5 -translate-y-1/2 text-lg text-slate-400">
                     badge
                   </span>
                   <input
@@ -175,14 +174,16 @@ export function EntryScreen({
 
               {/* Escolha de Avatar */}
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label id="create-avatar-label" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Seu Avatar
                 </label>
-                <div className="flex items-center gap-2">
-                  {AVATAR_OPTIONS.slice(0, 4).map((emoji) => (
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby="create-avatar-label">
+                  {AVATAR_OPTIONS.map((emoji) => (
                     <button
                       key={emoji}
                       type="button"
+                      aria-label={`Selecionar avatar ${emoji}`}
+                      aria-pressed={selectedAvatar === emoji}
                       onClick={() => setSelectedAvatar(emoji)}
                       className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl transition-transform hover:scale-105 ${
                         selectedAvatar === emoji
@@ -199,7 +200,7 @@ export function EntryScreen({
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 transition hover:bg-slate-100"
                     title="Sortear Aleatório"
                   >
-                    <span className="material-symbols-outlined text-lg">shuffle</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-lg">shuffle</span>
                   </button>
                 </div>
               </div>
@@ -214,12 +215,12 @@ export function EntryScreen({
               disabled={isLoading}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
-              <span className="material-symbols-outlined text-xl">rocket_launch</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-xl">rocket_launch</span>
               {isLoading ? 'Conectando à sala...' : 'Criar Sala e Convidar Amigos'}
             </button>
             <p className="mt-2.5 flex items-center justify-center gap-1 text-center text-[11px] font-medium text-slate-400">
-              <span className="material-symbols-outlined text-sm text-emerald-500">check_circle</span>
-              Código exclusivo gerado pelo servidor • Até 20 jogadores
+              <span aria-hidden="true" className="material-symbols-outlined text-sm text-emerald-500">check_circle</span>
+              Até 20 jogadores em uma sala privada.
             </p>
           </div>
         </div>
@@ -232,7 +233,7 @@ export function EntryScreen({
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-lg shadow-rose-200">
-                  <span className="material-symbols-outlined text-2xl">login</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-2xl">login</span>
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">Entrar em Sala</h2>
@@ -251,7 +252,7 @@ export function EntryScreen({
                   Seu Apelido
                 </label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute top-1/2 left-3.5 -translate-y-1/2 text-lg text-slate-400">
+                  <span aria-hidden="true" className="material-symbols-outlined absolute top-1/2 left-3.5 -translate-y-1/2 text-lg text-slate-400">
                     sentiment_satisfied
                   </span>
                   <input
@@ -264,6 +265,39 @@ export function EntryScreen({
                     autoFocus={initialRoomCode !== null}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-4 pl-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-rose-500 focus:bg-white"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label id="join-avatar-label" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Seu Avatar
+                </label>
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby="join-avatar-label">
+                  {AVATAR_OPTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      aria-label={`Selecionar avatar ${emoji}`}
+                      aria-pressed={selectedAvatar === emoji}
+                      onClick={() => setSelectedAvatar(emoji)}
+                      className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl transition-transform hover:scale-105 ${
+                        selectedAvatar === emoji
+                          ? 'border-2 border-rose-600 bg-rose-100 shadow-sm'
+                          : 'border-2 border-transparent bg-slate-100'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handleRandomAvatar}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 transition hover:bg-slate-100"
+                    title="Sortear Aleatório"
+                    aria-label="Sortear avatar aleatório"
+                  >
+                    <span aria-hidden="true" className="material-symbols-outlined text-lg">shuffle</span>
+                  </button>
                 </div>
               </div>
 
@@ -309,7 +343,7 @@ export function EntryScreen({
               disabled={isLoading}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-base font-bold text-white shadow-lg shadow-rose-300/50 transition hover:bg-rose-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
-              <span className="material-symbols-outlined text-xl">sports_esports</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-xl">sports_esports</span>
               {isLoading ? 'Conectando à sala...' : 'Entrar no Jogo Agora'}
             </button>
             <p className="mt-2.5 text-center text-[11px] font-medium text-slate-400">
@@ -358,7 +392,7 @@ export function EntryScreen({
             </div>
             <h3 className="text-base font-bold text-slate-800">Grite STOP! & Pontue</h3>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-              Acabou de preencher? Clique no botão gigante de STOP! O cronômetro congela para todos. Palavras únicas valem 10 pts e repetidas 5 pts.
+              Acabou de preencher? Clique no botão gigante de STOP! O cronômetro congela para todos. Palavras únicas valem 10 pontos e repetidas 5 pontos.
             </p>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { AVATAR_OPTIONS } from '../../../shared/types';
 import type { RoomState, Answer, Player, VoteDecision } from '../types';
 
 interface ResultsScreenProps {
@@ -84,7 +85,8 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold text-slate-500">
-                      #{String(index + 1).padStart(2, '0')} · {player?.nickname ?? 'Participante'}
+                      #{String(index + 1).padStart(2, '0')} · {player?.avatar ?? AVATAR_OPTIONS[0]}{' '}
+                      {player?.nickname ?? 'Participante'}
                       {isAuthor ? ' (Você)' : ''}
                     </p>
                     <p className="mt-2 text-2xl font-black text-slate-900">
@@ -144,8 +146,9 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
                   player.id === myPlayerId ? 'border border-amber-200 bg-amber-50' : 'bg-slate-50'
                 }`}
               >
-                <span className="text-sm font-bold text-slate-800">
-                  {index + 1}. {player.nickname}{player.id === myPlayerId ? ' (Você)' : ''}
+                <span className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                  {index + 1}. <span aria-hidden="true" className="text-xl">{player.avatar ?? AVATAR_OPTIONS[0]}</span>
+                  {player.nickname}{player.id === myPlayerId ? ' (Você)' : ''}
                 </span>
                 <span className="text-sm font-black text-slate-900">{player.score} pts</span>
               </li>
