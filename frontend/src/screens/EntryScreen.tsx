@@ -104,7 +104,7 @@ export function EntryScreen({
       {/* Hero Banner */}
       <div className="mx-auto my-6 max-w-3xl text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-4 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
-          <span className="material-symbols-outlined fill text-sm text-amber-500">bolt</span>
+          <span aria-hidden="true" className="material-symbols-outlined fill text-sm text-amber-500">bolt</span>
           Multiplayer em Tempo Real • A clássica Adedonha Turbo
         </div>
         <h1 className="text-4xl font-black leading-tight tracking-tight text-slate-900 md:text-5xl lg:text-6xl">
@@ -198,7 +198,7 @@ export function EntryScreen({
                     type="button"
                     onClick={handleRandomAvatar}
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 transition hover:bg-slate-100"
-                    title="Sortear Aleatório"
+                    aria-label="Sortear avatar aleatório"
                   >
                     <span aria-hidden="true" className="material-symbols-outlined text-lg">shuffle</span>
                   </button>
@@ -293,7 +293,6 @@ export function EntryScreen({
                     type="button"
                     onClick={handleRandomAvatar}
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 transition hover:bg-slate-100"
-                    title="Sortear Aleatório"
                     aria-label="Sortear avatar aleatório"
                   >
                     <span aria-hidden="true" className="material-symbols-outlined text-lg">shuffle</span>
