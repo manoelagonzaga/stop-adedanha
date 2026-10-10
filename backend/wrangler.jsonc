@@ -17,5 +17,8 @@
       "tag": "v1",
       "new_sqlite_classes": ["GameRoom"]
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["0 4 */2 * *"]
+  }
 }

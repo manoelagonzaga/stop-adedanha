@@ -1,9 +1,12 @@
 import { GameRoom } from './game-room';
+import { addRoomToRegistry, purgeAllRooms } from './cleanup';
 
 export { GameRoom };
+export * from './cleanup';
 
-type Env = {
+export type Env = {
   GAME_ROOM: DurableObjectNamespace;
+  ADMIN_SECRET?: string;
 };
 
 const MAX_ROOM_ALLOCATION_ATTEMPTS = 5;
@@ -15,7 +18,7 @@ function cors(origin: string | null): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Upgrade, Connection',
+    'Access-Control-Allow-Headers': 'Content-Type, Upgrade, Connection, Authorization',
   };
 }
 
@@ -35,6 +38,22 @@ export default {
       return Response.json({ status: 'ok' }, { headers: cors(origin) });
     }
 
+    // Route: POST /admin/cleanup → acionamento manual da rotina de limpeza
+    if (request.method === 'POST' && url.pathname === '/admin/cleanup') {
+      const authHeader = request.headers.get('Authorization');
+      const expectedSecret = env.ADMIN_SECRET;
+
+      if (expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+        return Response.json(
+          { error: 'UNAUTHORIZED', message: 'Token de autorização inválido ou ausente' },
+          { status: 401, headers: cors(origin) },
+        );
+      }
+
+      const report = await purgeAllRooms(env, true);
+      return Response.json(report, { status: 200, headers: cors(origin) });
+    }
+
     // Route: POST /rooms → reserve a canonical room code in its Durable Object
     if (request.method === 'POST' && url.pathname === '/rooms') {
       for (let attempt = 0; attempt < MAX_ROOM_ALLOCATION_ATTEMPTS; attempt += 1) {
@@ -49,6 +68,7 @@ export default {
         );
 
         if (allocation.status === 201) {
+          await addRoomToRegistry(env, roomCode);
           return Response.json({ code: roomCode }, { status: 201, headers: cors(origin) });
         }
         if (allocation.status !== 409) {
@@ -89,6 +109,17 @@ export default {
         hint: 'Use POST /rooms or WS /rooms/:code',
       },
       { status: roomMatch ? 405 : 404, headers: cors(origin) }
+    );
+  },
+
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    console.log(
+      `[Scheduled] Disparo de limpeza periódica: cron=${controller.cron}, time=${new Date(controller.scheduledTime).toISOString()}`,
+    );
+    ctx.waitUntil(
+      purgeAllRooms(env, true).catch((error) => {
+        console.error('[Scheduled] Erro na limpeza periódica:', error);
+      }),
     );
   },
 };

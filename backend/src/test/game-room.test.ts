@@ -13,6 +13,7 @@ function makeDurableObjectState() {
         persisted.set(key, structuredClone(value));
       }),
       delete: vi.fn(async (key: string) => persisted.delete(key)),
+      deleteAll: vi.fn(async () => persisted.clear()),
       setAlarm: vi.fn(async (timestamp: number) => {
         void timestamp;
       }),
@@ -120,7 +121,11 @@ describe('room allocation and identity', () => {
       GAME_ROOM: {
         idFromName: (name: string) => name,
         get: (id: string) => ({
-          fetch: async () => {
+          fetch: async (req?: Request) => {
+            const url = req instanceof Request ? req.url : String(req ?? '');
+            if (url.includes('/__registry')) {
+              return new Response(JSON.stringify({ ok: true }));
+            }
             allocatedCodes.push(id);
             attempt += 1;
             return new Response(null, { status: attempt === 1 ? 409 : 201 });
