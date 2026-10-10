@@ -20,13 +20,21 @@ export async function createTwoPlayers(browser: Browser): Promise<{
   const roomCode = (await roomHeading.textContent())?.match(/#([A-Z2-9]{6})/)?.[1];
   if (!roomCode) throw new Error('The server did not provide a valid room code.');
 
-  await guest.goto('/');
+  await hostContext.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const invitationButton = host.getByRole('button', { name: new RegExp(`Copiar Link da Sala #${roomCode}`) });
+  await invitationButton.click();
+  const inviteUrl = await host.evaluate(() => navigator.clipboard.readText());
+  expect(new URL(inviteUrl).searchParams.get('room')).toBe(roomCode);
+
+  await guest.goto(inviteUrl);
+  await expect(guest.getByLabel('Seu Apelido', { exact: true })).toBeFocused();
+  await expect(guest.getByLabel('Dígito 1 do código da sala')).toHaveValue(roomCode[0]);
   await guest.getByLabel('Seu Apelido', { exact: true }).fill('Convidado');
-  for (const [index, digit] of [...roomCode].entries()) {
-    await guest.getByLabel(`Dígito ${index + 1} do código da sala`).fill(digit);
-  }
   await guest.getByRole('button', { name: 'Entrar no Jogo Agora' }).click();
   await expect(guest.getByRole('heading', { name: /Sala Privada:/ })).toBeVisible();
+  await expect(host.getByText('2 de 20 participantes conectados')).toBeVisible();
+  await expect(host.getByText('Convidado')).toBeVisible();
+  await expect(guest.getByRole('list').getByText('Anfitrião', { exact: true }).first()).toBeVisible();
 
   return { hostContext, guestContext, host, guest };
 }

@@ -7,6 +7,40 @@ import { LobbyScreen } from './LobbyScreen';
 afterEach(cleanup);
 
 describe('LobbyScreen authoritative options', () => {
+  it('shows active and disconnected participants from the latest room snapshot', () => {
+    const room: RoomState = {
+      code: 'ABC234',
+      phase: 'CONFIGURING',
+      players: [
+        { id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0 },
+        { id: 'guest-2', nickname: 'Guest', isHost: false, status: 'active', score: 0 },
+        { id: 'guest-3', nickname: 'Offline', isHost: false, status: 'disconnected', score: 0 },
+      ],
+      categories: [{ id: 'cat-0', name: 'Nome' }],
+      currentRound: 0,
+      totalRounds: 3,
+    };
+
+    render(
+      <ToastProvider>
+        <LobbyScreen
+          room={room}
+          myPlayerId="host-1"
+          onUpdateCategories={vi.fn()}
+          onUpdateRounds={vi.fn()}
+          onUpdateOptions={vi.fn()}
+          onStartGame={vi.fn()}
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Participantes da sala' })).toBeInTheDocument();
+    expect(screen.getByText('2 de 20 participantes conectados')).toBeInTheDocument();
+    expect(screen.getByText('Guest')).toBeInTheDocument();
+    expect(screen.getByText('Offline')).toBeInTheDocument();
+    expect(screen.getByText('Desconectado')).toBeInTheDocument();
+  });
+
   it('sends duration and allowed-letter changes without applying them before a room snapshot', () => {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
     const onUpdateOptions = vi.fn();

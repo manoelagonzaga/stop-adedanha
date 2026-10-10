@@ -6,6 +6,22 @@ import { EntryScreen } from './EntryScreen';
 afterEach(cleanup);
 
 describe('EntryScreen room join feedback', () => {
+  it('prefills an invited room code and focuses the nickname field', () => {
+    render(
+      <ToastProvider>
+        <EntryScreen
+          onEnterRoom={vi.fn()}
+          onCreateRoom={vi.fn()}
+          initialRoomCode="ABC234"
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByLabelText('Seu Apelido')).toHaveFocus();
+    expect(screen.getAllByLabelText(/Dígito \d do código da sala/).map((input) => (input as HTMLInputElement).value))
+      .toEqual(['A', 'B', 'C', '2', '3', '4']);
+  });
+
   it('preserves nickname and room code when a join is rejected', () => {
     const onEnterRoom = vi.fn();
     const props = {

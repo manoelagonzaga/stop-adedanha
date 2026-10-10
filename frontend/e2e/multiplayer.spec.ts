@@ -6,6 +6,8 @@ test('two players complete a three-round match with host-confirmed progression',
   try {
     await prepareSingleCategoryMatch(host);
     await host.getByRole('button', { name: /play_circle Iniciar Partida/ }).click();
+    await expect(host.locator('[data-game-screen] h1')).toContainText('Rodada 1 de 3');
+    await expect(host.locator('[role="alert"]')).toHaveCount(0);
 
     for (let round = 1; round <= 3; round += 1) {
       await submitRoundAnswers(host, guest, round);
