@@ -115,14 +115,14 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
   const winner = results.podium.find((p) => p.tier === 'gold');
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center px-4 py-8">
+    <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center px-4 py-8" data-game-screen>
       {/* Header */}
       <div className="text-center">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white/80 backdrop-blur-sm">
           <span className="material-symbols-outlined text-sm text-amber-400">emoji_events</span>
           Fim de Jogo
         </div>
-        <h1 className="mt-1 text-4xl font-black text-white drop-shadow-lg md:text-5xl">
+        <h1 tabIndex={-1} className="mt-1 text-4xl font-black text-white outline-none drop-shadow-lg md:text-5xl">
           🏆 Pódio Final
         </h1>
         {winner && (

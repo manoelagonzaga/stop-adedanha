@@ -18,8 +18,8 @@ export function EntryScreen({
 }: EntryScreenProps) {
   const { showToast } = useToast();
 
-  const [createNick, setCreateNick] = useState('CapitãoPalavra');
-  const [joinNick, setJoinNick] = useState('Veloz99');
+  const [createNick, setCreateNick] = useState('');
+  const [joinNick, setJoinNick] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('🦊');
 
   // 6-digit PIN state
@@ -112,9 +112,14 @@ export function EntryScreen({
         </p>
 
         {error && (
-          <div className="mx-auto mt-4 max-w-md rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
+          <div role="alert" className="mx-auto mt-4 max-w-md rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
             {error}
           </div>
+        )}
+        {isLoading && (
+          <p role="status" className="mx-auto mt-4 max-w-md text-sm font-semibold text-indigo-700">
+            Conectando à sala e aguardando confirmação do servidor...
+          </p>
         )}
       </div>
 
@@ -143,7 +148,7 @@ export function EntryScreen({
             {/* Form */}
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label htmlFor="create-nickname" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Seu Apelido no Jogo
                 </label>
                 <div className="relative">
@@ -151,6 +156,7 @@ export function EntryScreen({
                     badge
                   </span>
                   <input
+                    id="create-nickname"
                     type="text"
                     value={createNick}
                     onChange={(e) => setCreateNick(e.target.value)}
@@ -191,17 +197,6 @@ export function EntryScreen({
                 </div>
               </div>
 
-              {/* Resumo das categorias */}
-              <div className="flex items-center justify-between rounded-xl border border-indigo-100/60 bg-indigo-50/50 p-3">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-base text-indigo-600">category</span>
-                  <div className="text-xs">
-                    <span className="font-bold text-slate-800">Categorias: </span>
-                    <span className="text-slate-600">Nome, CEP, Animal, Cor, Fruta, Objeto (6)</span>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-indigo-600">Personalizável</span>
-              </div>
             </div>
           </div>
 
@@ -245,7 +240,7 @@ export function EntryScreen({
             {/* Form */}
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label htmlFor="join-nickname" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Seu Apelido
                 </label>
                 <div className="relative">
@@ -253,6 +248,7 @@ export function EntryScreen({
                     sentiment_satisfied
                   </span>
                   <input
+                    id="join-nickname"
                     type="text"
                     value={joinNick}
                     onChange={(e) => setJoinNick(e.target.value)}
@@ -265,13 +261,15 @@ export function EntryScreen({
 
               {/* Input Código PIN da Sala */}
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label htmlFor="room-pin-1" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Código da Sala (6 dígitos)
                 </label>
                 <div className="grid grid-cols-6 gap-2">
                   {pinDigits.map((digit, i) => (
                     <input
                       key={i}
+                      id={`room-pin-${i + 1}`}
+                      aria-label={`Dígito ${i + 1} do código da sala`}
                       ref={(el) => { pinInputsRef.current[i] = el; }}
                       type="text"
                       maxLength={1}

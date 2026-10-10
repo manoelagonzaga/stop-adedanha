@@ -9,7 +9,10 @@ interface LobbyScreenProps {
   onUpdateRounds: (totalRounds: number) => void;
   onUpdateOptions: (roundDurationSeconds: 0 | 60 | 90 | 120, allowedLetters: string[]) => void;
   onStartGame: () => void;
-  statusMessage?: string | null;
+  actionStatus?: {
+    status: 'pending' | 'confirmed' | 'rejected';
+    message?: string;
+  } | null;
 }
 
 const CATEGORY_PACKS = {
@@ -34,7 +37,7 @@ export function LobbyScreen({
   onUpdateRounds,
   onUpdateOptions,
   onStartGame,
-  statusMessage,
+  actionStatus,
 }: LobbyScreenProps) {
   const { showToast } = useToast();
   const me = room.players.find((p: Player) => p.id === myPlayerId);
@@ -48,7 +51,10 @@ export function LobbyScreen({
   const allowedLetters = room.allowedLetters ?? ALL_LETTERS;
   const excludedLetters = ALL_LETTERS.filter((letter) => !allowedLetters.includes(letter));
   const hardLettersBlocked = HARD_LETTERS.every((letter) => !allowedLetters.includes(letter));
-  const canEditLobby = isHost && room.phase === 'CONFIGURING';
+  const canEditLobby =
+    isHost &&
+    room.phase === 'CONFIGURING' &&
+    actionStatus?.status !== 'pending';
   const activePlayers = room.players.filter((player) => player.status === 'active').length;
   const canStart =
     canEditLobby &&
@@ -134,7 +140,7 @@ export function LobbyScreen({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 md:px-6" data-game-screen>
       {/* Topo do Lobby */}
       <div className="flex flex-col items-start justify-between gap-4 border-b border-indigo-100 pb-6 sm:flex-row sm:items-center">
         <div>
@@ -146,10 +152,10 @@ export function LobbyScreen({
             <span className="text-xs text-slate-400">•</span>
             <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Configuração confirmada pelo servidor
+              Estado atual recebido do servidor
             </span>
           </div>
-          <h1 className="mt-1 text-2xl font-black text-slate-900 md:text-3xl">
+          <h1 tabIndex={-1} className="mt-1 text-2xl font-black text-slate-900 outline-none md:text-3xl">
             Sala Privada: <span className="text-indigo-600">#{room.code}</span>
           </h1>
           <p className="text-xs text-slate-500 md:text-sm">
@@ -181,6 +187,10 @@ export function LobbyScreen({
               <span className="material-symbols-outlined text-lg">play_arrow</span>
               Iniciar Partida
             </button>
+          ) : actionStatus?.status === 'pending' ? (
+            <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
+              Aguardando confirmação do servidor…
+            </span>
           ) : isHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
               Entre 2 jogadores ativos e configure ao menos uma categoria para iniciar.
@@ -197,12 +207,19 @@ export function LobbyScreen({
         </div>
       </div>
 
-      {statusMessage && (
+      {actionStatus && (
         <p
-          role="alert"
-          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
+          role={actionStatus.status === 'rejected' ? 'alert' : 'status'}
+          aria-live={actionStatus.status === 'rejected' ? 'assertive' : 'polite'}
+          className={`mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${
+            actionStatus.status === 'rejected'
+              ? 'border-rose-200 bg-rose-50 text-rose-700'
+              : actionStatus.status === 'pending'
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
         >
-          {statusMessage}
+          {actionStatus.message}
         </p>
       )}
 

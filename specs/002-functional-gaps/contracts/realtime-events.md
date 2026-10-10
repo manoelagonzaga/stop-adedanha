@@ -200,10 +200,13 @@ At minimum: `INVALID_JSON`, `PROTOCOL_REQUIRED`, `PROTOCOL_UNSUPPORTED`, `INVALI
 ## Contract invariants
 
 - Only the server advances phases and computes deadlines, validity, score, and ranking.
+- Clients correlate every state-changing request with `requestId`; only the matching `command:ack` marks it committed, while a matching `error`, failed local send, or connection loss marks it rejected.
+- Configuration controls stay pending/disabled until the matching outcome arrives. Server error messages are shown without presenting the rejected state as saved.
 - Lobby snapshots do not expose a live scoreboard or player list in the configuration UI.
-- Game/review/final-result content is sourced from real server snapshots/events, never local demo fallbacks.
+- Game/review/final-result content is sourced from real server snapshots/events, never local demo fallbacks; screens without a snapshot show loading or a recoverable error.
 - Review proceeds in category order. Missing decisions count as agreement at timeout.
 - Eligible-voter denominator excludes the author. Invalidation ratios from 10% through 50% inclusive halve category points; ratios above 50% score zero.
 - The host confirms the next intermediate round; all clients observe the resulting `round:started`.
 - Reconnect restores the same player and complete current room/round state.
-- Unstarted/inactive rooms expire after 24 hours without valid activity; completed rooms expire one hour after `GAME_OVER`. Active round/review alarms take precedence.
+- Unstarted/configuring rooms expire after 24 hours without valid activity; completed rooms expire one hour after `GAME_OVER`. Active round/review alarms take precedence over room cleanup.
+- Expiration clears persisted room, game, round, and resume-credential data and closes remaining room sockets; `ROUND_RESULTS` awaiting host confirmation remains an active game and does not expire as completed.

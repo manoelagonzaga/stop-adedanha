@@ -33,14 +33,33 @@ export function clearResumeToken(roomCode: string): void {
 
 export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [pendingRequestIds, setPendingRequestIds] = useState<string[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEventRef = useRef(onEvent);
+  const pendingRequestsRef = useRef(new Map<string, ClientCommand['type']>());
   onEventRef.current = onEvent;
 
   const send = useCallback((cmd: ClientCommand) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(cmd));
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+
+    pendingRequestsRef.current.set(cmd.requestId, cmd.type);
+    setPendingRequestIds([...pendingRequestsRef.current.keys()]);
+    try {
+      socket.send(JSON.stringify(cmd));
+      return true;
+    } catch (error) {
+      console.error('[WS] Could not send command', error);
+      pendingRequestsRef.current.delete(cmd.requestId);
+      setPendingRequestIds([...pendingRequestsRef.current.keys()]);
+      onEventRef.current({
+        type: 'error',
+        requestId: cmd.requestId,
+        code: 'SEND_FAILED',
+        message: 'Não foi possível enviar a ação. Verifique sua conexão e tente novamente.',
+      });
+      return false;
     }
   }, []);
 
@@ -48,6 +67,8 @@ export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) 
     if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     wsRef.current?.close();
     wsRef.current = null;
+    pendingRequestsRef.current.clear();
+    setPendingRequestIds([]);
     setStatus('disconnected');
   }, []);
 
@@ -114,6 +135,14 @@ export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) 
           if (roomCode) clearResumeToken(roomCode);
           setStatus('error');
         }
+        const requestId = 'requestId' in event ? event.requestId : undefined;
+        if (
+          requestId &&
+          (event.type === 'command:ack' || (event.type === 'error' && event.requestId))
+        ) {
+          pendingRequestsRef.current.delete(requestId);
+          setPendingRequestIds([...pendingRequestsRef.current.keys()]);
+        }
         onEventRef.current(event);
       };
 
@@ -124,6 +153,16 @@ export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) 
       ws.onclose = () => {
         if (!cancelled) {
           setStatus('disconnected');
+          for (const requestId of pendingRequestsRef.current.keys()) {
+            onEventRef.current({
+              type: 'error',
+              requestId,
+              code: 'CONNECTION_LOST',
+              message: 'A conexão foi perdida antes da confirmação desta ação.',
+            });
+          }
+          pendingRequestsRef.current.clear();
+          setPendingRequestIds([]);
           // Auto-reconnect after 3 seconds
           reconnectTimer.current = setTimeout(connect, 3000);
         }
@@ -139,7 +178,7 @@ export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) 
     };
   }, [url, roomCode, disconnect]);
 
-  return { status, send };
+  return { status, send, pendingRequestIds };
 }
 
 // ── Derived game state from server events ──────────────────────────────────
@@ -149,6 +188,14 @@ export interface GameState {
   answers: Answer[];
   finalResults: FinalResults | null;
   myPlayerId: string | null;
+  pendingCommands: Record<string, ClientCommand['type']>;
+  lastCommandResult: {
+    requestId: string;
+    status: 'committed' | 'duplicate' | 'rejected';
+    commandType?: ClientCommand['type'];
+    code?: string;
+    message?: string;
+  } | null;
 }
 
 export function useGameState() {
@@ -157,10 +204,47 @@ export function useGameState() {
     answers: [],
     finalResults: null,
     myPlayerId: null,
+    pendingCommands: {},
+    lastCommandResult: null,
   });
 
   const handleEvent = useCallback((event: ServerEvent) => {
     switch (event.type) {
+      case 'command:ack':
+        setState((s) => {
+          const pendingCommands = { ...s.pendingCommands };
+          delete pendingCommands[event.requestId];
+          return {
+            ...s,
+            pendingCommands,
+            lastCommandResult: {
+              requestId: event.requestId,
+              status: event.status,
+              commandType: event.commandType,
+            },
+          };
+        });
+        break;
+
+      case 'error':
+        if (event.requestId) {
+          setState((s) => {
+            const pendingCommands = { ...s.pendingCommands };
+            delete pendingCommands[event.requestId!];
+            return {
+              ...s,
+              pendingCommands,
+              lastCommandResult: {
+                requestId: event.requestId!,
+                status: 'rejected',
+                code: event.code,
+                message: event.message,
+              },
+            };
+          });
+        }
+        break;
+
       case 'session:ready': {
         if (event.playerId) {
           setState((s) => ({ ...s, myPlayerId: event.playerId ?? null }));
@@ -257,5 +341,13 @@ export function useGameState() {
     }
   }, []);
 
-  return { state, setState, handleEvent };
+  const trackCommand = useCallback((command: ClientCommand) => {
+    if (!command.requestId) return;
+    setState((s) => ({
+      ...s,
+      pendingCommands: { ...s.pendingCommands, [command.requestId]: command.type },
+    }));
+  }, []);
+
+  return { state, setState, handleEvent, trackCommand };
 }

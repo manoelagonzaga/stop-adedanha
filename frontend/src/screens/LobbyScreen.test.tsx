@@ -85,4 +85,46 @@ describe('LobbyScreen authoritative options', () => {
     expect(screen.getByRole('button', { name: '90s' })).toBeDisabled();
     expect(screen.getByText('Aguardando um anfitrião ativo…')).toBeInTheDocument();
   });
+
+  it('shows pending, confirmed, and rejected command feedback explicitly', () => {
+    const room: RoomState = {
+      code: 'ABC234',
+      phase: 'CONFIGURING',
+      players: [{ id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0 }],
+      categories: [{ id: 'cat-0', name: 'Nome' }],
+      currentRound: 0,
+      totalRounds: 5,
+    };
+    const props = {
+      room,
+      myPlayerId: 'host-1',
+      onUpdateCategories: vi.fn(),
+      onUpdateRounds: vi.fn(),
+      onUpdateOptions: vi.fn(),
+      onStartGame: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <ToastProvider>
+        <LobbyScreen {...props} actionStatus={{ status: 'pending', message: 'Aguardando confirmação...' }} />
+      </ToastProvider>,
+    );
+    expect(screen.getByText('Aguardando confirmação...')).toHaveAttribute('role', 'status');
+    expect(screen.getByText('Aguardando confirmação do servidor…')).toBeInTheDocument();
+    expect(screen.queryByText(/Entre 2 jogadores ativos/)).not.toBeInTheDocument();
+
+    rerender(
+      <ToastProvider>
+        <LobbyScreen {...props} actionStatus={{ status: 'confirmed', message: 'Configuração salva.' }} />
+      </ToastProvider>,
+    );
+    expect(screen.getByText('Configuração salva.')).toHaveAttribute('role', 'status');
+
+    rerender(
+      <ToastProvider>
+        <LobbyScreen {...props} actionStatus={{ status: 'rejected', message: 'Configuração recusada.' }} />
+      </ToastProvider>,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Configuração recusada.');
+  });
 });

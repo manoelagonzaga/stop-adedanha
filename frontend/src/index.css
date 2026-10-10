@@ -193,19 +193,16 @@ body {
 
 /* ── Respect prefers-reduced-motion ── */
 @media (prefers-reduced-motion: reduce) {
-  .bg-shape {
-    animation: none !important;
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 
-  /* Remove letter draw transition */
-  [aria-live="assertive"] {
-    transition: none !important;
-  }
-
-  /* Remove active:scale transitions */
-  button {
-    transition: none !important;
-  }
+  .bg-shape { animation: none !important; }
 }
 
 /* ── Screen-reader only utility ── */

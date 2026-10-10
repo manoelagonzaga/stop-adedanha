@@ -1,7 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/Toast';
 import { EntryScreen } from './EntryScreen';
+
+afterEach(cleanup);
 
 describe('EntryScreen room join feedback', () => {
   it('preserves nickname and room code when a join is rejected', () => {
@@ -43,5 +45,23 @@ describe('EntryScreen room join feedback', () => {
       '4',
     ]);
     expect(screen.getByText(/ROOM_NOT_FOUND/)).toBeInTheDocument();
+  });
+
+  it('shows the pending connection state and disables duplicate room actions', () => {
+    render(
+      <ToastProvider>
+        <EntryScreen
+          onEnterRoom={vi.fn()}
+          onCreateRoom={vi.fn()}
+          isLoading
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByText('Conectando à sala e aguardando confirmação do servidor...'))
+      .toHaveAttribute('role', 'status');
+    const actionButtons = screen.getAllByRole('button', { name: /Conectando à sala/ });
+    expect(actionButtons).toHaveLength(2);
+    actionButtons.forEach((button) => expect(button).toBeDisabled());
   });
 });

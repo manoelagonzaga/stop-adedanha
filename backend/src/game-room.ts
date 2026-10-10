@@ -28,6 +28,8 @@ const DEFAULT_ROUND_DURATION_SECONDS = 60;
 const ROUND_DURATIONS = [0, 60, 90, 120] as const;
 const DEFAULT_ALLOWED_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const REVIEW_CATEGORY_DURATION_MS = 30_000; // 30 seconds per category review
+const IDLE_ROOM_TTL_MS = 24 * 60 * 60 * 1000;
+const COMPLETED_ROOM_TTL_MS = 60 * 60 * 1000;
 
 const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-0', name: 'Nome' },
@@ -131,6 +133,7 @@ export class GameRoom implements DurableObject {
     this.initialization = this.state.blockConcurrencyWhile(async () => {
       const saved = await this.state.storage.get<PersistedGameState>('gameState');
       const persistedRoom = saved?.room ?? await this.state.storage.get<RoomState>('room');
+      let expirationNeedsPersist = false;
       if (persistedRoom) {
         const legacyJoinBase = Date.now() - persistedRoom.players.length;
         this.room = {
@@ -142,6 +145,18 @@ export class GameRoom implements DurableObject {
           roundDurationSeconds: persistedRoom.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
           allowedLetters: persistedRoom.allowedLetters ?? [...DEFAULT_ALLOWED_LETTERS],
         };
+        if (
+          (this.room.phase === 'WAITING_PLAYERS' || this.room.phase === 'CONFIGURING') &&
+          this.room.expiresAt === undefined
+        ) {
+          this.room.lastActivityAt ??= Date.now();
+          this.room.expiresAt = this.room.lastActivityAt + IDLE_ROOM_TTL_MS;
+          expirationNeedsPersist = true;
+        } else if (this.room.phase === 'GAME_OVER' && this.room.expiresAt === undefined) {
+          this.room.completedAt ??= Date.now();
+          this.room.expiresAt = this.room.completedAt + COMPLETED_ROOM_TTL_MS;
+          expirationNeedsPersist = true;
+        }
       }
 
       const persistedRound =
@@ -150,6 +165,13 @@ export class GameRoom implements DurableObject {
         const roundData = this.restoreRoundData(persistedRound);
         this.rounds.set(roundData.id, roundData);
         this.currentRoundData = roundData;
+      }
+      if (expirationNeedsPersist) {
+        await this.state.storage.put('gameState', {
+          room: this.room,
+          roundData: persistedRound ?? null,
+        } satisfies PersistedGameState);
+        await this.state.storage.put('room', this.room);
       }
       await this.reconcilePersistedDeadline();
     });
@@ -1219,8 +1241,12 @@ export class GameRoom implements DurableObject {
           this.currentRoundData,
           this.room.currentReviewCategoryIndex ?? 0,
         );
+        return;
       }
     }
+
+    if (await this.expireRoomIfDue(now)) return;
+    await this.scheduleNextAlarm();
   }
 
   private restoreRoundData(saved: PersistedRoundData): RoundData {
@@ -1247,7 +1273,7 @@ export class GameRoom implements DurableObject {
       if (now >= this.room.roundDeadline) {
         await this.beginCategoryReview(this.currentRoundData);
       } else {
-        await this.state.storage.setAlarm(this.room.roundDeadline);
+        await this.scheduleNextAlarm();
       }
       return;
     }
@@ -1259,12 +1285,77 @@ export class GameRoom implements DurableObject {
           this.room.currentReviewCategoryIndex ?? 0,
         );
       } else if (this.room.reviewDeadline !== undefined) {
-        await this.state.storage.setAlarm(this.room.reviewDeadline);
+        await this.scheduleNextAlarm();
       }
       return;
     }
 
+    if (await this.expireRoomIfDue(now)) return;
+    await this.scheduleNextAlarm();
+  }
+
+  private async scheduleNextAlarm(): Promise<void> {
+    let deadline: number | undefined;
+    if (this.room.phase === 'ROUND_ACTIVE') {
+      deadline = this.room.roundDeadline;
+    } else if (this.room.phase === 'CATEGORY_REVIEW') {
+      deadline = this.room.reviewDeadline;
+    } else if (
+      this.room.phase === 'WAITING_PLAYERS' ||
+      this.room.phase === 'CONFIGURING' ||
+      this.room.phase === 'GAME_OVER'
+    ) {
+      deadline = this.room.expiresAt;
+    }
+
+    if (deadline === undefined) {
+      await this.state.storage.deleteAlarm();
+      return;
+    }
+    await this.state.storage.setAlarm(Math.max(Date.now(), deadline));
+  }
+
+  private async expireRoomIfDue(now: number): Promise<boolean> {
+    const canExpire =
+      this.room.phase === 'WAITING_PLAYERS' ||
+      this.room.phase === 'CONFIGURING' ||
+      this.room.phase === 'GAME_OVER';
+    if (!canExpire || this.room.expiresAt === undefined || now < this.room.expiresAt) {
+      return false;
+    }
+
     await this.state.storage.deleteAlarm();
+    await Promise.all([
+      this.state.storage.delete('gameState'),
+      this.state.storage.delete('room'),
+      this.state.storage.delete('roundData'),
+      this.state.storage.delete('resumeCredentials'),
+    ]);
+    this.room = {
+      code: '',
+      phase: 'WAITING_PLAYERS',
+      players: [],
+      categories: DEFAULT_CATEGORIES,
+      currentRound: 0,
+      totalRounds: DEFAULT_ROUNDS,
+      roundDurationSeconds: DEFAULT_ROUND_DURATION_SECONDS,
+      allowedLetters: [...DEFAULT_ALLOWED_LETTERS],
+    };
+    this.rounds.clear();
+    this.currentRoundData = null;
+    this.requestIds.clear();
+    this.requestIdOrder = [];
+    for (const socket of this.state.getWebSockets()) {
+      try {
+        socket.close(1000, 'Room expired');
+      } catch (error) {
+        console.error('[GameRoom] Failed to close expired-room socket:', error);
+      }
+    }
+    this.sessions.clear();
+    this.sessionRoomCodes.clear();
+    this.negotiatedSockets.clear();
+    return true;
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
@@ -1462,8 +1553,21 @@ export class GameRoom implements DurableObject {
   }
 
   private async persistRoom(): Promise<void> {
+    const now = Date.now();
+    if (this.room.phase === 'WAITING_PLAYERS' || this.room.phase === 'CONFIGURING') {
+      this.room.lastActivityAt = now;
+      this.room.expiresAt = now + IDLE_ROOM_TTL_MS;
+    } else if (this.room.phase === 'GAME_OVER') {
+      if (this.room.completedAt === undefined) {
+        this.room.completedAt = now;
+        this.room.expiresAt = now + COMPLETED_ROOM_TTL_MS;
+      } else if (this.room.expiresAt === undefined) {
+        this.room.expiresAt = this.room.completedAt + COMPLETED_ROOM_TTL_MS;
+      }
+    }
     await this.persistGameState();
     await this.state.storage.put('room', this.room);
+    await this.scheduleNextAlarm();
   }
 
   private async persistRoundData(roundData: RoundData): Promise<void> {

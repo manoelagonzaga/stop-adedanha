@@ -36,13 +36,13 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6" data-game-screen>
       <header className="mb-6 flex flex-col justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm md:flex-row md:items-center">
         <div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
             FASE DE VALIDAÇÃO · CATEGORIA {categoryIndex + 1}/{room.categories.length}
           </span>
-          <h1 className="mt-2 text-2xl font-black text-slate-900">
+          <h1 tabIndex={-1} className="mt-2 text-2xl font-black text-slate-900 outline-none">
             {category.name} — Rodada {room.currentRound} de {room.totalRounds}
           </h1>
           <p className="mt-1 text-sm text-slate-500">

@@ -31,6 +31,10 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
 
+    if (request.method === 'GET' && url.pathname === '/health') {
+      return Response.json({ status: 'ok' }, { headers: cors(origin) });
+    }
+
     // Route: POST /rooms → reserve a canonical room code in its Durable Object
     if (request.method === 'POST' && url.pathname === '/rooms') {
       for (let attempt = 0; attempt < MAX_ROOM_ALLOCATION_ATTEMPTS; attempt += 1) {
