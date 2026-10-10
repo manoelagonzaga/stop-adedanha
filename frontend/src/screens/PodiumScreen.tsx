@@ -119,7 +119,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
       {/* Header */}
       <div className="text-center">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500 backdrop-blur-sm">
-          <span className="material-symbols-outlined text-sm text-amber-400">emoji_events</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-sm text-amber-400">emoji_events</span>
           Fim de Jogo
         </div>
         <h1 tabIndex={-1} className="mt-1 text-4xl font-black text-slate-900 outline-none drop-shadow-lg md:text-5xl">

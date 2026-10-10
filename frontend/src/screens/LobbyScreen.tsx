@@ -184,7 +184,7 @@ export function LobbyScreen({
             aria-label={`Copiar Link da Sala #${room.code}`}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
-            <span className="material-symbols-outlined text-lg">link</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">link</span>
             Copiar Link da Sala <span className="font-mono">#{room.code}</span>
           </button>
           {canStart ? (
@@ -193,7 +193,7 @@ export function LobbyScreen({
               onClick={onStartGame}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 active:scale-95 sm:flex-initial"
             >
-              <span className="material-symbols-outlined text-lg">play_arrow</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">play_arrow</span>
               Iniciar Partida
             </button>
           ) : actionStatus?.status === 'pending' ? (
@@ -237,7 +237,7 @@ export function LobbyScreen({
         <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">tune</span>
               </span>
               <h2 className="text-lg font-bold text-slate-800">Regras & Estrutura da Partida</h2>
@@ -301,7 +301,7 @@ export function LobbyScreen({
         <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
           <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">category</span>
               </span>
               <div>
@@ -357,7 +357,7 @@ export function LobbyScreen({
                     className="ml-1 text-slate-400 hover:text-rose-500 focus:outline-none"
                     title={`Remover ${cat}`}
                   >
-                    <span className="material-symbols-outlined text-sm">close</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-sm">close</span>
                   </button>
                 )}
               </div>
@@ -386,7 +386,7 @@ export function LobbyScreen({
                 onClick={handleAddCustomCategory}
                 className="flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700"
               >
-                <span className="material-symbols-outlined text-base">add</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
                 Adicionar
               </button>
             </div>
@@ -397,7 +397,7 @@ export function LobbyScreen({
         <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
           <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">font_download</span>
               </span>
               <h2 className="text-lg font-bold text-slate-800">Letras Permitidas na Partida</h2>
@@ -410,7 +410,7 @@ export function LobbyScreen({
                 aria-pressed={hardLettersBlocked}
                 className="flex items-center gap-1 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
               >
-                <span className="material-symbols-outlined text-sm">filter_alt</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-sm">filter_alt</span>
                 {hardLettersBlocked ? 'Desbloquear Difíceis' : 'Bloquear Difíceis (K, W, Y, X, Z)'}
               </button>
             )}
@@ -510,7 +510,7 @@ export function LobbyScreen({
               disabled={!canStart}
               className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-95"
             >
-              <span className="material-symbols-outlined text-xl">play_circle</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-xl">play_circle</span>
               Iniciar Partida Agora
             </button>
           </div>
