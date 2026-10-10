@@ -181,7 +181,7 @@ export function LobbyScreen({
           <button
             type="button"
             onClick={handleCopyLink}
-            aria-label={`Copiar Link da Sala #${room.code}`}
+            aria-label="Copiar Link da Sala"
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
             <span className="material-symbols-outlined text-lg">link</span>
