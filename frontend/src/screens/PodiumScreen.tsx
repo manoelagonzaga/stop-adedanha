@@ -81,10 +81,10 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
 
       {/* Name + Score */}
       <div className="mt-2 text-center">
-        <span className="block max-w-[120px] truncate text-sm font-black text-white drop-shadow">
+        <span className="block max-w-[120px] truncate text-sm font-black text-slate-900 drop-shadow">
           {item.nickname}
         </span>
-        <span className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-white">
+        <span className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-slate-500">
           {item.score} pts
         </span>
       </div>
@@ -93,7 +93,7 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
       <div
         className={`mt-3 flex w-28 items-center justify-center rounded-t-2xl bg-gradient-to-b ${cfg.bg} ${cfg.height} shadow-lg`}
       >
-        <span className="text-2xl font-black text-white/90">{item.position}º</span>
+        <span className="text-2xl font-black text-slate-900">{item.position}º</span>
       </div>
     </div>
   );
@@ -118,15 +118,15 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center px-4 py-8" data-game-screen>
       {/* Header */}
       <div className="text-center">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white/80 backdrop-blur-sm">
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500 backdrop-blur-sm">
           <span className="material-symbols-outlined text-sm text-amber-400">emoji_events</span>
           Fim de Jogo
         </div>
-        <h1 tabIndex={-1} className="mt-1 text-4xl font-black text-white outline-none drop-shadow-lg md:text-5xl">
+        <h1 tabIndex={-1} className="mt-1 text-4xl font-black text-slate-900 outline-none drop-shadow-lg md:text-5xl">
           🏆 Pódio Final
         </h1>
         {winner && (
-          <p className="mt-2 text-base font-semibold text-white/80">
+          <p className="mt-2 text-base font-semibold text-slate-500">
             <span className="font-black text-amber-400">{winner.nickname}</span> venceu a partida!
           </p>
         )}
@@ -149,7 +149,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
             showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
           }`}
         >
-          <h2 className="mb-3 text-center text-xs font-black uppercase tracking-widest text-white/60">
+          <h2 className="mb-3 text-center text-xs font-black uppercase tracking-widest text-slate-500">
             Demais Participantes
           </h2>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/10 backdrop-blur-sm">
@@ -163,15 +163,15 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
                   } ${isMe ? 'bg-indigo-500/20' : ''}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-black text-white">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-black text-slate-900">
                       {item.position}º
                     </span>
                     <span className="text-xl">{getAvatar(item.playerId)}</span>
-                    <span className="text-sm font-bold text-white">
+                    <span className="text-sm font-bold text-slate-900">
                       {item.nickname} {isMe && <span className="text-indigo-300">(Você)</span>}
                     </span>
                   </div>
-                  <span className="text-sm font-black text-white/80">{item.score} pts</span>
+                  <span className="text-sm font-black text-slate-500">{item.score} pts</span>
                 </div>
               );
             })}
@@ -188,7 +188,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
         <button
           type="button"
           onClick={onPlayAgain}
-          className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95"
+          className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black font-bold text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95"
         >
           <span className="material-symbols-outlined">replay</span>
           Jogar Novamente
@@ -196,7 +196,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
         <button
           type="button"
           onClick={onBackToHome}
-          className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
+          className="flex items-center gap-2 rounded-2xl border border-white/20 bg-rose-600 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
         >
           <span className="material-symbols-outlined">home</span>
           Voltar ao Início
