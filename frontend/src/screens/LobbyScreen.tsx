@@ -181,10 +181,11 @@ export function LobbyScreen({
           <button
             type="button"
             onClick={handleCopyLink}
+            aria-label={`Copiar Link da Sala #${room.code}`}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
             <span className="material-symbols-outlined text-lg">link</span>
-            Copiar Link da Sala <span className="font-black">#{room.code}</span>
+            Copiar Link da Sala
           </button>
           {canStart ? (
             <button
@@ -214,57 +215,6 @@ export function LobbyScreen({
           )}
         </div>
       </div>
-
-      <section
-        aria-labelledby="lobby-participants-heading"
-        className="mt-5 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 id="lobby-participants-heading" className="text-lg font-bold text-slate-800">
-              Participantes da sala
-            </h2>
-            <p className="text-sm text-slate-500" role="status" aria-live="polite">
-              {activePlayers} de 20 participantes conectados
-            </p>
-          </div>
-          {activePlayers < 2 && isHost && (
-            <p className="text-sm font-semibold text-amber-700">
-              A partida pode começar quando outro participante entrar.
-            </p>
-          )}
-        </div>
-        <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {room.players.map((player) => (
-            <li
-              key={player.id}
-              className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <span
-                  aria-hidden="true"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700"
-                >
-                  {player.nickname.slice(0, 1).toLocaleUpperCase()}
-                </span>
-                <span className="truncate font-semibold text-slate-800">{player.nickname}</span>
-                {player.isHost && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-800">
-                    Anfitrião
-                  </span>
-                )}
-              </span>
-              <span
-                className={`ml-2 shrink-0 text-xs font-semibold ${
-                  player.status === 'active' ? 'text-emerald-700' : 'text-slate-500'
-                }`}
-              >
-                {player.status === 'active' ? 'Conectado' : 'Desconectado'}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
 
       {actionStatus && (
         <p
@@ -493,6 +443,57 @@ export function LobbyScreen({
             })}
           </div>
         </div>
+
+      <section
+        aria-labelledby="lobby-participants-heading"
+        className="mt-5 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 id="lobby-participants-heading" className="text-lg font-bold text-slate-800">
+              Participantes da sala
+            </h2>
+            <p className="text-sm text-slate-500" role="status" aria-live="polite">
+              {activePlayers} de 20 participantes conectados
+            </p>
+          </div>
+          {activePlayers < 2 && isHost && (
+            <p className="text-sm font-semibold text-amber-700">
+              A partida pode começar quando outro participante entrar.
+            </p>
+          )}
+        </div>
+        <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {room.players.map((player) => (
+            <li
+              key={player.id}
+              className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700"
+                >
+                  {player.nickname.slice(0, 1).toLocaleUpperCase()}
+                </span>
+                <span className="truncate font-semibold text-slate-800">{player.nickname}</span>
+                {player.isHost && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-800">
+                    Anfitrião
+                  </span>
+                )}
+              </span>
+              <span
+                className={`ml-2 shrink-0 text-xs font-semibold ${
+                  player.status === 'active' ? 'text-emerald-700' : 'text-slate-500'
+                }`}
+              >
+                {player.status === 'active' ? 'Conectado' : 'Desconectado'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
         {/* Card 4: Confirmação & Início (Apenas anfitrião) */}
         {canEditLobby && (

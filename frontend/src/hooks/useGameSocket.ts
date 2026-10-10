@@ -42,12 +42,32 @@ export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) 
 
   const send = useCallback((cmd: ClientCommand) => {
     const socket = wsRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    const isLobbyCommand =
+      cmd.type === 'lobby:categories:update' ||
+      cmd.type === 'lobby:rounds:update' ||
+      cmd.type === 'lobby:options:update';
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (import.meta.env.DEV && isLobbyCommand) {
+        console.warn('[WS] Lobby command not sent', {
+          commandType: cmd.type,
+          readyState: socket?.readyState ?? 'no-socket',
+          url: socket?.url,
+        });
+      }
+      return false;
+    }
 
     pendingRequestsRef.current.set(cmd.requestId, cmd.type);
     setPendingRequestIds([...pendingRequestsRef.current.keys()]);
     try {
       socket.send(JSON.stringify(cmd));
+      if (import.meta.env.DEV && isLobbyCommand) {
+        console.info('[WS] Lobby command sent', {
+          commandType: cmd.type,
+          requestId: cmd.requestId,
+          url: socket.url,
+        });
+      }
       return true;
     } catch (error) {
       console.error('[WS] Could not send command', error);
@@ -83,6 +103,7 @@ export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) 
     function connect() {
       if (cancelled) return;
       setStatus('connecting');
+      if (import.meta.env.DEV) console.info('[WS] Connecting to room', { url });
       const ws = new WebSocket(url!);
       wsRef.current = ws;
 

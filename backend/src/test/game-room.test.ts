@@ -4,6 +4,7 @@ import type { RoomState, ServerEvent } from '../types';
 
 function makeDurableObjectState() {
   const serverSockets: WebSocket[] = [];
+  const socketTags = new Map<WebSocket, string[]>();
   const persisted = new Map<string, unknown>();
   const state = {
     storage: {
@@ -18,11 +19,13 @@ function makeDurableObjectState() {
       deleteAlarm: vi.fn(async () => undefined),
     },
     blockConcurrencyWhile: vi.fn((callback: () => Promise<void>) => callback()),
-    acceptWebSocket: vi.fn((socket: WebSocket) => {
+    acceptWebSocket: vi.fn((socket: WebSocket, tags: string[] = []) => {
       serverSockets.push(socket);
+      socketTags.set(socket, tags);
       socket.accept();
     }),
     getWebSockets: vi.fn(() => serverSockets),
+    getTags: vi.fn((socket: WebSocket) => socketTags.get(socket) ?? []),
   } as unknown as DurableObjectState;
 
   return { state, persisted };
@@ -140,7 +143,8 @@ describe('room allocation and identity', () => {
 
   describe('authoritative lobby configuration', () => {
     async function createRoom(nickname = 'Host') {
-      const room = new GameRoom(makeDurableObjectState().state);
+      const { state } = makeDurableObjectState();
+      const room = new GameRoom(state);
       await allocate(room, 'ABC234');
       const events: ServerEvent[] = [];
       const host = await connect(room, 'ABC234', events);
@@ -152,7 +156,7 @@ describe('room allocation and identity', () => {
       await nextEvent(events, 'room:joined');
       await nextEvent(events, 'room:state');
       await nextEvent(events, 'command:ack');
-      return { room, host, events };
+      return { room, host, events, state };
     }
 
     async function joinGuest(room: GameRoom) {
@@ -172,6 +176,149 @@ describe('room allocation and identity', () => {
       await nextEvent(events, 'command:ack');
       return { guest, events };
     }
+
+    it('serializes rapid host configuration commands and acknowledges each committed update', async () => {
+      const { room, host, events } = await createRoom();
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'lobby:categories:update',
+          requestId: 'categories-queued',
+          categories: ['Nome', 'Cidade'],
+        }),
+      );
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'lobby:options:update',
+          requestId: 'options-queued',
+          roundDurationSeconds: 90,
+          allowedLetters: ['A', 'B'],
+        }),
+      );
+
+      const firstState = await nextEvent(events, 'room:state');
+      expect(firstState.state.categories.map((category) => category.name)).toEqual(['Nome', 'Cidade']);
+      expect((await nextEvent(events, 'command:ack')).requestId).toBe('categories-queued');
+
+      const secondState = await nextEvent(events, 'room:state');
+      expect(secondState.state).toMatchObject({
+        roundDurationSeconds: 90,
+        allowedLetters: ['A', 'B'],
+      });
+      expect((await nextEvent(events, 'command:ack')).requestId).toBe('options-queued');
+      expect((room as unknown as {
+        room: { categories: Array<{ name: string }>; roundDurationSeconds: number; allowedLetters: string[] };
+      }).room).toMatchObject({
+        categories: [{ name: 'Nome' }, { name: 'Cidade' }],
+        roundDurationSeconds: 90,
+        allowedLetters: ['A', 'B'],
+      });
+    });
+
+    it('persists and broadcasts host configuration changes after a guest joins', async () => {
+      const { room, host, events: hostEvents } = await createRoom();
+      const { events: guestEvents } = await joinGuest(room);
+
+      await nextEvent(hostEvents, 'player:presence');
+      await nextEvent(hostEvents, 'room:state');
+      await nextEvent(guestEvents, 'player:presence');
+      await nextEvent(guestEvents, 'room:state');
+
+      const updates = [
+        {
+          type: 'lobby:categories:update',
+          requestId: 'joined-categories-update',
+          categories: ['Nome', 'Cidade', 'Animal'],
+        },
+        {
+          type: 'lobby:rounds:update',
+          requestId: 'joined-rounds-update',
+          totalRounds: 8,
+        },
+        {
+          type: 'lobby:options:update',
+          requestId: 'joined-options-update',
+          roundDurationSeconds: 90,
+          allowedLetters: ['A', 'B', 'C'],
+        },
+      ] as const;
+
+      for (const update of updates) {
+        await room.webSocketMessage(host, JSON.stringify(update));
+        const hostState = await nextEvent(hostEvents, 'room:state');
+        const guestState = await nextEvent(guestEvents, 'room:state');
+        expect(guestState.state).toEqual(hostState.state);
+        expect((await nextEvent(hostEvents, 'command:ack')).requestId).toBe(update.requestId);
+      }
+
+      expect((room as unknown as {
+        room: {
+          categories: Array<{ name: string }>;
+          totalRounds: number;
+          roundDurationSeconds: number;
+          allowedLetters: string[];
+        };
+      }).room).toMatchObject({
+        categories: [{ name: 'Nome' }, { name: 'Cidade' }, { name: 'Animal' }],
+        totalRounds: 8,
+        roundDurationSeconds: 90,
+        allowedLetters: ['A', 'B', 'C'],
+      });
+    });
+
+    it('returns an explicit error when a command arrives on an inactive WebSocket session', async () => {
+      const { room, host, events } = await createRoom();
+      (room as unknown as { sessions: Map<WebSocket, string> }).sessions.delete(host);
+
+      await room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'lobby:options:update',
+          requestId: 'inactive-session-options',
+          roundDurationSeconds: 90,
+          allowedLetters: ['A'],
+        }),
+      );
+
+      expect(await nextEvent(events, 'error')).toMatchObject({
+        code: 'SESSION_INVALID',
+        requestId: 'inactive-session-options',
+      });
+    });
+
+    it('restores hibernated WebSocket sessions before processing lobby changes', async () => {
+      const { room, host, events, state } = await createRoom();
+      const { events: guestEvents } = await joinGuest(room);
+      await nextEvent(events, 'player:presence');
+      await nextEvent(events, 'room:state');
+      await nextEvent(guestEvents, 'player:presence');
+      await nextEvent(guestEvents, 'room:state');
+      const reactivatedRoom = new GameRoom(state);
+
+      await reactivatedRoom.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'lobby:options:update',
+          requestId: 'hibernated-options-update',
+          roundDurationSeconds: 90,
+          allowedLetters: ['A', 'B'],
+        }),
+      );
+
+      const hostState = await nextEvent(events, 'room:state');
+      expect(hostState).toMatchObject({
+        state: { roundDurationSeconds: 90, allowedLetters: ['A', 'B'] },
+      });
+      expect(await nextEvent(guestEvents, 'room:state')).toEqual(hostState);
+      expect(await nextEvent(events, 'command:ack')).toMatchObject({
+        requestId: 'hibernated-options-update',
+        status: 'committed',
+      });
+      expect((reactivatedRoom as unknown as { sessions: Map<WebSocket, string> }).sessions.get(host))
+        .toBe((room as unknown as { sessions: Map<WebSocket, string> }).sessions.get(host));
+    });
 
     it('trims category names and rejects empty, duplicate, oversized, and out-of-range lists', async () => {
       const { room, host, events } = await createRoom();
