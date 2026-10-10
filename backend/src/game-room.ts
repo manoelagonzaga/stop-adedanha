@@ -148,10 +148,11 @@ export class GameRoom implements DurableObject {
       const persistedRoom = saved?.room ?? await this.state.storage.get<RoomState>('room');
       let expirationNeedsPersist = false;
       if (persistedRoom) {
-        const legacyJoinBase = Date.now() - persistedRoom.players.length;
+        const playersList = Array.isArray(persistedRoom.players) ? persistedRoom.players : [];
+        const legacyJoinBase = Date.now() - playersList.length;
         this.room = {
           ...persistedRoom,
-          players: persistedRoom.players.map((player, index) => ({
+          players: playersList.map((player, index) => ({
             ...player,
             joinedAt: player.joinedAt ?? legacyJoinBase + index,
           })),
@@ -219,6 +220,45 @@ export class GameRoom implements DurableObject {
       this.room.code = code;
       await this.persistRoom();
       return Response.json({ code }, { status: 201 });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/__purge') {
+      await this.purge();
+      return Response.json({ ok: true, code: this.room.code });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/__registry/add') {
+      const payload = (await request.json().catch(() => ({}))) as { code?: string };
+      const code = payload?.code ? String(payload.code).toUpperCase() : '';
+      if (code) {
+        const rooms = (await this.state.storage.get<string[]>('activeRooms')) ?? [];
+        if (!rooms.includes(code)) {
+          rooms.push(code);
+          await this.state.storage.put('activeRooms', rooms);
+        }
+      }
+      return Response.json({ ok: true });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/__registry/remove') {
+      const payload = (await request.json().catch(() => ({}))) as { code?: string };
+      const code = payload?.code ? String(payload.code).toUpperCase() : '';
+      if (code) {
+        const rooms = (await this.state.storage.get<string[]>('activeRooms')) ?? [];
+        const updated = rooms.filter((c) => c !== code);
+        await this.state.storage.put('activeRooms', updated);
+      }
+      return Response.json({ ok: true });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/__registry/list') {
+      const rooms = (await this.state.storage.get<string[]>('activeRooms')) ?? [];
+      return Response.json({ rooms });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/__registry/clear') {
+      await this.state.storage.delete('activeRooms');
+      return Response.json({ ok: true });
     }
 
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
@@ -1437,6 +1477,52 @@ export class GameRoom implements DurableObject {
     await this.state.storage.setAlarm(Math.max(Date.now(), deadline));
   }
 
+  private async clearAllStorage(): Promise<void> {
+    if (typeof this.state.storage.deleteAll === 'function') {
+      await this.state.storage.deleteAll();
+    } else {
+      await Promise.all([
+        this.state.storage.delete('gameState'),
+        this.state.storage.delete('room'),
+        this.state.storage.delete('roundData'),
+        this.state.storage.delete('resumeCredentials'),
+      ]);
+    }
+  }
+
+  public async purge(): Promise<void> {
+    await this.state.storage.deleteAlarm();
+    await this.clearAllStorage();
+
+    this.room = {
+      code: '',
+      phase: 'WAITING_PLAYERS',
+      players: [],
+      categories: DEFAULT_CATEGORIES,
+      currentRound: 0,
+      totalRounds: DEFAULT_ROUNDS,
+      roundDurationSeconds: DEFAULT_ROUND_DURATION_SECONDS,
+      allowedLetters: [...DEFAULT_ALLOWED_LETTERS],
+    };
+    this.rounds.clear();
+    this.currentRoundData = null;
+    this.requestIds.clear();
+    this.requestIdOrder = [];
+    this.inFlightRequests.clear();
+    this.failedRequests.clear();
+
+    for (const socket of this.state.getWebSockets()) {
+      try {
+        socket.close(1001, 'Manutenção periódica programada');
+      } catch (error) {
+        console.error('[GameRoom] Failed to close purged-room socket:', error);
+      }
+    }
+    this.sessions.clear();
+    this.sessionRoomCodes.clear();
+    this.negotiatedSockets.clear();
+  }
+
   private async expireRoomIfDue(now: number): Promise<boolean> {
     const canExpire =
       this.room.phase === 'WAITING_PLAYERS' ||
@@ -1447,12 +1533,7 @@ export class GameRoom implements DurableObject {
     }
 
     await this.state.storage.deleteAlarm();
-    await Promise.all([
-      this.state.storage.delete('gameState'),
-      this.state.storage.delete('room'),
-      this.state.storage.delete('roundData'),
-      this.state.storage.delete('resumeCredentials'),
-    ]);
+    await this.clearAllStorage();
     this.room = {
       code: '',
       phase: 'WAITING_PLAYERS',
