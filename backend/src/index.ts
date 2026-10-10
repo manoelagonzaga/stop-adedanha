@@ -6,6 +6,8 @@ type Env = {
   GAME_ROOM: DurableObjectNamespace;
 };
 
+const MAX_ROOM_ALLOCATION_ATTEMPTS = 5;
+
 // ── CORS helper ──────────────────────────────────────────────────────────────
 
 function cors(origin: string | null): Record<string, string> {
@@ -29,24 +31,38 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
 
-    // Route: POST /rooms  → create a new room (returns room code)
+    // Route: POST /rooms → reserve a canonical room code in its Durable Object
     if (request.method === 'POST' && url.pathname === '/rooms') {
-      const roomCode = generateCode();
-      const roomId = env.GAME_ROOM.idFromName(roomCode);
-      // Ping the DO to initialize it
-      const resp = await env.GAME_ROOM.get(roomId).fetch(
-        new Request(`${url.origin}/rooms/${roomCode}`, { headers: request.headers })
-      );
-      if (resp.status === 426) {
-        // Expected — DO requires WS; just return the code
-        return Response.json({ code: roomCode }, { headers: cors(origin) });
+      for (let attempt = 0; attempt < MAX_ROOM_ALLOCATION_ATTEMPTS; attempt += 1) {
+        const roomCode = generateCode();
+        const roomId = env.GAME_ROOM.idFromName(roomCode);
+        const allocation = await env.GAME_ROOM.get(roomId).fetch(
+          new Request('https://room.internal/__allocate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: roomCode }),
+          }),
+        );
+
+        if (allocation.status === 201) {
+          return Response.json({ code: roomCode }, { status: 201, headers: cors(origin) });
+        }
+        if (allocation.status !== 409) {
+          return Response.json(
+            { error: 'ROOM_ALLOCATION_FAILED', message: 'Could not allocate a room code' },
+            { status: 502, headers: cors(origin) },
+          );
+        }
       }
-      return Response.json({ code: roomCode }, { headers: cors(origin) });
+      return Response.json(
+        { error: 'ROOM_ALLOCATION_FAILED', message: 'Could not allocate a unique room code' },
+        { status: 503, headers: cors(origin) },
+      );
     }
 
-    // Route: GET/WS /rooms/:code  → join room (WebSocket upgrade)
+    // Route: GET/WS /rooms/:code → connect to the Durable Object for a room
     const roomMatch = url.pathname.match(/^\/rooms\/([A-Za-z0-9-]+)\/?$/);
-    if (roomMatch) {
+    if (roomMatch && request.method === 'GET') {
       const roomCode = roomMatch[1].toUpperCase();
       const roomId = env.GAME_ROOM.idFromName(roomCode);
       const doResp = await env.GAME_ROOM.get(roomId).fetch(request);
@@ -64,8 +80,11 @@ export default {
     }
 
     return Response.json(
-      { error: 'NOT_FOUND', hint: 'Use POST /rooms or WS /rooms/:code' },
-      { status: 404, headers: cors(origin) }
+      {
+        error: roomMatch ? 'METHOD_NOT_ALLOWED' : 'NOT_FOUND',
+        hint: 'Use POST /rooms or WS /rooms/:code',
+      },
+      { status: roomMatch ? 405 : 404, headers: cors(origin) }
     );
   },
 };

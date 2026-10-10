@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import type { RoomState, Category, Player } from '../types';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { RoomState, Category } from '../types';
 import { useToast } from '../components/Toast';
 import { playStopSound } from '../utils/audio';
 
@@ -10,40 +10,44 @@ interface GameScreenProps {
   onStop: (roundId: string) => void;
 }
 
-const LETTERS = [
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'L', 'M',
-  'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V',
-];
-
 export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
   const { showToast } = useToast();
-  const roundId = `round-${room.currentRound}`;
-  const me = room.players.find((p: Player) => p.id === myPlayerId);
-  const isHost = me?.isHost ?? false;
+  const roundId = room.currentRoundId ?? `round-${room.currentRound}`;
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [currentLetter, setCurrentLetter] = useState<string>(room.currentLetter || 'M');
-  const [timeLeft, setTimeLeft] = useState<number>(60);
+  const [now, setNow] = useState(Date.now);
   const [isStopped, setIsStopped] = useState<boolean>(false);
+  const stopRequestedRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const currentLetter = room.currentLetter ?? 'M';
+  const timeLeft =
+    room.roundDeadline === undefined
+      ? null
+      : Math.max(0, Math.ceil((room.roundDeadline - now) / 1000));
 
-  // Countdown timer
+  // The displayed countdown follows the deadline supplied by the room server.
   useEffect(() => {
-    if (isStopped || timeLeft <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleTriggerStop(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    if (room.roundDeadline === undefined) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
-  }, [isStopped, timeLeft]);
+  }, [room.roundDeadline]);
+
+  const handleTriggerStop = useCallback(() => {
+    if (stopRequestedRef.current || isStopped) return;
+    stopRequestedRef.current = true;
+    setIsStopped(true);
+    playStopSound();
+    showToast('🛑 VOCÊ BATEU STOP! Congelando rodada...');
+    onSubmitAnswers(roundId, answers);
+    onStop(roundId);
+  }, [answers, isStopped, onStop, onSubmitAnswers, roundId, showToast]);
+
+  useEffect(() => {
+    stopRequestedRef.current = false;
+    setAnswers({});
+    setIsStopped(false);
+  }, [roundId]);
 
   // Keyboard shortcut: ENTER to trigger STOP
   useEffect(() => {
@@ -59,46 +63,21 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isStopped, answers]);
+  }, [handleTriggerStop, isStopped]);
 
   function handleInputChange(categoryId: string, value: string) {
-    setAnswers((prev) => ({
-      ...prev,
-      [categoryId]: value.toUpperCase(),
-    }));
-  }
-
-  function handleRerollLetter() {
-    if (!isHost) return;
-    const available = LETTERS.filter((l) => l !== currentLetter);
-    const pick = available[Math.floor(Math.random() * available.length)] || 'S';
-    setCurrentLetter(pick);
-    showToast(`Nova letra sorteada: ${pick}!`);
-  }
-
-  function handleTriggerStop(timeExpired = false) {
-    if (isStopped) return;
-    setIsStopped(true);
-    playStopSound();
-
-    if (timeExpired) {
-      showToast('Tempo esgotado! Congelando rodada...');
-    } else {
-      showToast('🛑 VOCÊ BATEU STOP! Congelando rodada...');
-    }
-
-    onSubmitAnswers(roundId, answers);
-    setTimeout(() => {
-      onStop(roundId);
-    }, 900);
+    const nextAnswers = { ...answers, [categoryId]: value.toUpperCase() };
+    setAnswers(nextAnswers);
+    onSubmitAnswers(roundId, nextAnswers);
   }
 
   const filledCount = Object.values(answers).filter((val) => val && val.trim().length > 0).length;
   const totalCategories = room.categories.length;
   const progressPercent = totalCategories > 0 ? Math.round((filledCount / totalCategories) * 100) : 0;
 
-  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-  const seconds = (timeLeft % 60).toString().padStart(2, '0');
+  const minutes =
+    timeLeft === null ? null : Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const seconds = timeLeft === null ? null : (timeLeft % 60).toString().padStart(2, '0');
 
   // Sorted players for live classification
   const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
@@ -127,11 +106,11 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
 
         {/* Cronômetro Decrescente */}
         <div className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${
-          timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
+          timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
         }`}>
           <div className="relative flex h-10 w-10 items-center justify-center">
             <span className={`material-symbols-outlined text-2xl ${
-              timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
+              timeLeft !== null && timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
             }`}>
               timelapse
             </span>
@@ -141,9 +120,9 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
               Tempo Restante
             </span>
             <span className={`text-2xl font-black tracking-tight ${
-              timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
+              timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
             }`}>
-              {minutes}:{seconds}
+              {timeLeft === null ? 'Sem limite' : `${minutes}:${seconds}`}
             </span>
           </div>
         </div>
@@ -249,16 +228,6 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             <p className="mt-2 text-xs font-medium text-slate-500">
               Preencha todas as categorias iniciando com a letra <strong>{currentLetter}</strong>
             </p>
-            {isHost && (
-              <button
-                type="button"
-                onClick={handleRerollLetter}
-                className="mt-3 flex items-center gap-1 text-xs font-bold text-indigo-600 underline hover:text-indigo-800"
-              >
-                <span className="material-symbols-outlined text-sm">casino</span>
-                Sortear outra letra
-              </button>
-            )}
           </div>
 
           {/* 2) Placar / Classificação ao Vivo */}

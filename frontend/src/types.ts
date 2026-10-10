@@ -3,12 +3,14 @@ export type {
   Player,
   RoomState,
   Answer,
+  VoteDecision,
   Category,
   PodiumItem,
   RankingListItem,
   FinalResults,
   ClientCommand,
   ServerEvent,
+  ProtocolVersion,
+  CommandRequest,
+  RoomSettings,
 } from '../../shared/types';
-
-
