@@ -47,7 +47,7 @@ export interface CategoryScoreResult {
 export function computeCategoryScores(
   roundSnapshot: Pick<RoundSnapshot, 'answers'>,
   category: Category,
-  players: Pick<Player, 'id'>[],
+  players: (Pick<Player, 'id'> & Partial<Pick<Player, 'status'>>)[],
 ): CategoryScoreResult {
   const scores: Record<string, number> = {};
 
@@ -73,7 +73,19 @@ export function computeCategoryScores(
     const clean = ans.value.trim().toLowerCase();
     if (clean && ans.isValid) {
       const isUnique = freq[clean] === 1;
-      scores[ans.playerId] = (scores[ans.playerId] ?? 0) + (isUnique ? 10 : 5);
+      const baseScore = isUnique ? 10 : 5;
+      const eligibleVoters = ans.eligibleVoters ??
+        players
+          .filter((player) => player.id !== ans.playerId && player.status !== 'disconnected')
+          .map((player) => player.id);
+      const invalidationVotes = ans.votes
+        ? Object.entries(ans.votes).filter(
+            ([voterId, decision]) => eligibleVoters.includes(voterId) && decision === 'invalidate',
+          ).length
+        : ans.invalidations.filter((voterId) => eligibleVoters.includes(voterId)).length;
+      scores[ans.playerId] =
+        (scores[ans.playerId] ?? 0) +
+        baseScore * resolveInvalidation(invalidationVotes, eligibleVoters.length);
     } else {
       // Ensure the player has a 0-entry even if blank/invalidated
       scores[ans.playerId] = scores[ans.playerId] ?? 0;
@@ -120,16 +132,17 @@ export function computeRoundScores(
 // ── Invalidation vote ──────────────────────────────────────────────────────
 
 /**
- * Returns whether an answer should be marked invalid based on vote count.
- * Rule: strict majority (> 50%) of active players must vote to invalidate.
+ * Returns the score multiplier for invalidation votes among eligible voters.
  */
 export function resolveInvalidation(
   invalidationVotes: number,
-  activePlayers: number,
-): boolean {
-  if (activePlayers === 0) return false;
-  const majority = Math.ceil(activePlayers / 2);
-  return invalidationVotes >= majority;
+  eligibleVoters: number,
+): 0 | 0.5 | 1 {
+  if (eligibleVoters <= 0) return 1;
+  const ratio = invalidationVotes / eligibleVoters;
+  if (ratio > 0.5) return 0;
+  if (ratio >= 0.1) return 0.5;
+  return 1;
 }
 
 // ── Final ranking / podium ─────────────────────────────────────────────────

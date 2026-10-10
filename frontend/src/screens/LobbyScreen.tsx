@@ -7,6 +7,7 @@ interface LobbyScreenProps {
   myPlayerId: string;
   onUpdateCategories: (categories: string[]) => void;
   onUpdateRounds: (totalRounds: number) => void;
+  onUpdateOptions: (roundDurationSeconds: 0 | 60 | 90 | 120, allowedLetters: string[]) => void;
   onStartGame: () => void;
   statusMessage?: string | null;
 }
@@ -19,85 +20,111 @@ const CATEGORY_PACKS = {
 
 const ALL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const HARD_LETTERS = ['K', 'W', 'Y', 'X', 'Z'];
+const ROUND_DURATIONS: { label: string; value: 0 | 60 | 90 | 120 }[] = [
+  { label: '60s', value: 60 },
+  { label: '90s', value: 90 },
+  { label: '120s', value: 120 },
+  { label: 'Sem Fim', value: 0 },
+];
 
 export function LobbyScreen({
   room,
   myPlayerId,
   onUpdateCategories,
   onUpdateRounds,
+  onUpdateOptions,
   onStartGame,
+  statusMessage,
 }: LobbyScreenProps) {
   const { showToast } = useToast();
   const me = room.players.find((p: Player) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
 
   const [newCategoryInput, setNewCategoryInput] = useState('');
-  const [roundTime, setRoundTime] = useState<number>(60);
-  const [excludedLetters, setExcludedLetters] = useState<string[]>([]);
-  const [hardLettersBlocked, setHardLettersBlocked] = useState(false);
 
   const categoryNames = room.categories.map((c: Category) => c.name);
+  const roundTime = room.roundDurationSeconds ?? 60;
+  const allowedLetters = room.allowedLetters ?? ALL_LETTERS;
+  const excludedLetters = ALL_LETTERS.filter((letter) => !allowedLetters.includes(letter));
+  const hardLettersBlocked = HARD_LETTERS.every((letter) => !allowedLetters.includes(letter));
+  const canEditLobby = isHost && room.phase === 'CONFIGURING';
+  const activePlayers = room.players.filter((player) => player.status === 'active').length;
+  const canStart =
+    canEditLobby &&
+    activePlayers >= 2 &&
+    categoryNames.length >= 1 &&
+    categoryNames.length <= 20;
 
   function handleSelectRounds(rounds: number) {
-    if (!isHost) return;
+    if (!canEditLobby) return;
     onUpdateRounds(rounds);
-    showToast(`Partida configurada para ${rounds} rodadas.`);
   }
 
-  function handleSelectTime(seconds: number) {
-    if (!isHost) return;
-    setRoundTime(seconds);
-    showToast(seconds === 0 ? 'Tempo por rodada: Sem limite' : `Tempo por rodada: ${seconds} segundos`);
+  function handleSelectTime(seconds: 0 | 60 | 90 | 120) {
+    if (!canEditLobby) return;
+    onUpdateOptions(seconds, allowedLetters);
   }
 
   function handleLoadPack(packName: keyof typeof CATEGORY_PACKS) {
-    if (!isHost) return;
+    if (!canEditLobby) return;
     const pack = CATEGORY_PACKS[packName];
     onUpdateCategories(pack);
-    showToast(`Pacote ${packName.toUpperCase()} carregado!`);
   }
 
   function handleAddCustomCategory() {
-    if (!isHost) return;
+    if (!canEditLobby) return;
     const trimmed = newCategoryInput.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      showToast('Informe o nome da categoria.');
+      return;
+    }
+    if (Array.from(trimmed).length > 40) {
+      showToast('O nome da categoria deve ter até 40 pontos de código Unicode.');
+      return;
+    }
+    if (categoryNames.length >= 20) {
+      showToast('A partida pode ter no máximo 20 categorias.');
+      return;
+    }
     if (categoryNames.map(c => c.toLowerCase()).includes(trimmed.toLowerCase())) {
       showToast('Esta categoria já está adicionada.');
       return;
     }
     onUpdateCategories([...categoryNames, trimmed]);
     setNewCategoryInput('');
-    showToast(`Categoria "${trimmed}" adicionada!`);
   }
 
   function handleRemoveCategory(nameToRemove: string) {
-    if (!isHost) return;
-    if (categoryNames.length <= 4) {
-      showToast('Mantenha pelo menos 4 categorias para uma partida dinâmica.');
+    if (!canEditLobby) return;
+    if (categoryNames.length <= 1) {
+      showToast('A partida precisa ter pelo menos uma categoria.');
       return;
     }
     onUpdateCategories(categoryNames.filter((n) => n !== nameToRemove));
-    showToast(`Categoria "${nameToRemove}" removida.`);
   }
 
   function handleToggleHardLetters() {
-    if (!isHost) return;
-    if (!hardLettersBlocked) {
-      setExcludedLetters((prev) => Array.from(new Set([...prev, ...HARD_LETTERS])));
-      setHardLettersBlocked(true);
-      showToast('Letras difíceis bloqueadas (K, W, Y, X, Z)!');
-    } else {
-      setExcludedLetters((prev) => prev.filter((l) => !HARD_LETTERS.includes(l)));
-      setHardLettersBlocked(false);
-      showToast('Todas as letras liberadas para sorteio!');
+    if (!canEditLobby) return;
+    const nextAllowedLetters = hardLettersBlocked
+      ? Array.from(new Set([...allowedLetters, ...HARD_LETTERS]))
+      : allowedLetters.filter((letter) => !HARD_LETTERS.includes(letter));
+    if (nextAllowedLetters.length === 0) {
+      showToast('Mantenha pelo menos uma letra permitida.');
+      return;
     }
+    onUpdateOptions(roundTime, nextAllowedLetters);
   }
 
   function handleToggleLetter(letter: string) {
-    if (!isHost) return;
-    setExcludedLetters((prev) =>
-      prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter]
-    );
+    if (!canEditLobby) return;
+    const nextAllowedLetters = allowedLetters.includes(letter)
+      ? allowedLetters.filter((allowedLetter) => allowedLetter !== letter)
+      : [...allowedLetters, letter];
+    if (nextAllowedLetters.length === 0) {
+      showToast('Mantenha pelo menos uma letra permitida.');
+      return;
+    }
+    onUpdateOptions(roundTime, nextAllowedLetters);
   }
 
   function handleCopyLink() {
@@ -118,7 +145,7 @@ export function LobbyScreen({
             <span className="text-xs text-slate-400">•</span>
             <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Salvo em tempo real
+              Configuração confirmada pelo servidor
             </span>
           </div>
           <h1 className="mt-1 text-2xl font-black text-slate-900 md:text-3xl">
@@ -139,7 +166,7 @@ export function LobbyScreen({
             <span className="material-symbols-outlined text-lg">link</span>
             Copiar Link da Sala
           </button>
-          {isHost ? (
+          {canStart ? (
             <button
               type="button"
               onClick={onStartGame}
@@ -148,6 +175,10 @@ export function LobbyScreen({
               <span className="material-symbols-outlined text-lg">play_arrow</span>
               Iniciar Partida
             </button>
+          ) : isHost ? (
+            <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
+              Entre 2 jogadores ativos e configure ao menos uma categoria para iniciar.
+            </span>
           ) : (
             <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-500">
               Aguardando o host iniciar…
@@ -155,6 +186,15 @@ export function LobbyScreen({
           )}
         </div>
       </div>
+
+      {statusMessage && (
+        <p
+          role="alert"
+          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
+        >
+          {statusMessage}
+        </p>
+      )}
 
       {/* Grid Principal das Configurações — Sem placar nem lista de jogadores nesta fase */}
       <div className="mt-6 space-y-6">
@@ -181,7 +221,7 @@ export function LobbyScreen({
                   <button
                     key={count}
                     type="button"
-                    disabled={!isHost}
+                    disabled={!canEditLobby}
                     onClick={() => handleSelectRounds(count)}
                     className={`py-2 rounded-xl text-sm font-bold transition ${
                       room.totalRounds === count
@@ -201,16 +241,12 @@ export function LobbyScreen({
                 Tempo por Rodada
               </label>
               <div className="grid grid-cols-4 gap-2">
-                {[
-                  { label: '60s', value: 60 },
-                  { label: '90s', value: 90 },
-                  { label: '120s', value: 120 },
-                  { label: 'Sem Fim', value: 0 },
-                ].map(({ label, value }) => (
+                {ROUND_DURATIONS.map(({ label, value }) => (
                   <button
                     key={label}
                     type="button"
-                    disabled={!isHost}
+                    disabled={!canEditLobby}
+                    aria-pressed={roundTime === value}
                     onClick={() => handleSelectTime(value)}
                     className={`py-2 rounded-xl text-sm font-bold transition ${
                       roundTime === value
@@ -236,11 +272,11 @@ export function LobbyScreen({
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Categorias da Partida</h2>
                 <p className="text-xs text-slate-500">
-                  Mínimo de 4 para um jogo dinâmico. Adicione ou remova categorias livremente.
+                  Escolha de 1 a 20 categorias. Os nomes devem ser únicos e ter até 40 pontos de código Unicode.
                 </p>
               </div>
             </div>
-            {isHost && (
+            {canEditLobby && (
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="font-medium text-slate-400">Packs:</span>
                 <button
@@ -279,7 +315,7 @@ export function LobbyScreen({
                   {(index + 1).toString().padStart(2, '0')}
                 </span>
                 <span>{cat}</span>
-                {isHost && (
+                {canEditLobby && (
                   <button
                     type="button"
                     onClick={() => handleRemoveCategory(cat)}
@@ -294,11 +330,12 @@ export function LobbyScreen({
           </div>
 
           {/* Adicionar Nova Categoria */}
-          {isHost && (
+          {canEditLobby && (
             <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
               <input
                 type="text"
                 value={newCategoryInput}
+                maxLength={80}
                 onChange={(e) => setNewCategoryInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -334,6 +371,8 @@ export function LobbyScreen({
               <button
                 type="button"
                 onClick={handleToggleHardLetters}
+                disabled={!canEditLobby}
+                aria-pressed={hardLettersBlocked}
                 className="flex items-center gap-1 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
               >
                 <span className="material-symbols-outlined text-sm">filter_alt</span>
@@ -354,7 +393,8 @@ export function LobbyScreen({
                 <button
                   key={letter}
                   type="button"
-                  disabled={!isHost}
+                  disabled={!canEditLobby}
+                  aria-pressed={!isExcluded}
                   onClick={() => handleToggleLetter(letter)}
                   className={`h-9 rounded-lg text-xs font-bold border transition ${
                     isExcluded
@@ -370,7 +410,7 @@ export function LobbyScreen({
         </div>
 
         {/* Card 4: Confirmação & Início (Apenas anfitrião) */}
-        {isHost && (
+        {canEditLobby && (
           <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-indigo-50 p-6 sm:flex-row">
             <div>
               <h3 className="text-base font-bold text-slate-900">Tudo pronto para o jogo?</h3>
@@ -381,6 +421,7 @@ export function LobbyScreen({
             <button
               type="button"
               onClick={onStartGame}
+              disabled={!canStart}
               className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-95"
             >
               <span className="material-symbols-outlined text-xl">play_circle</span>

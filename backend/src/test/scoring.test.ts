@@ -65,6 +65,11 @@ describe('passesLetterCheck', () => {
     expect(passesLetterCheck('', 'S')).toBe(false);
     expect(passesLetterCheck('   ', 'S')).toBe(false);
   });
+
+  it('trims surrounding whitespace before validating the initial letter', () => {
+    expect(passesLetterCheck('  Silvia  ', 'S')).toBe(true);
+    expect(passesLetterCheck('  Maria  ', 'S')).toBe(false);
+  });
 });
 
 // ── computeCategoryScores ──────────────────────────────────────────────────
@@ -104,6 +109,15 @@ describe('computeCategoryScores', () => {
 
     expect(scores['p1']).toBe(0);
     expect(scores['p2']).toBe(10);
+  });
+
+  it('gives 0 for answers the server marked invalid for the round letter', () => {
+    const answers = [
+      makeAnswer('p1', 'cat-1', 'Maria', { isValid: false }),
+      makeAnswer('p2', 'cat-1', '   ', { isValid: false }),
+    ];
+    const { scores } = computeCategoryScores(makeSnapshot(answers), cat1, players);
+    expect(scores).toMatchObject({ p1: 0, p2: 0 });
   });
 
   it('gives 0 for invalidated answers', () => {
@@ -155,6 +169,38 @@ describe('computeCategoryScores', () => {
     expect(scores['p1']).toBe(5);
     expect(scores['p2']).toBe(5);
     expect(scores['p3']).toBe(10);
+  });
+
+  it('applies invalidation thresholds to unique and duplicate base scores, excluding the author', () => {
+    const eligibleVoters = Array.from({ length: 10 }, (_, index) => ({ id: `voter-${index}` }));
+    const allPlayers = [{ id: 'author' }, ...eligibleVoters];
+    const target = makeAnswer('author', 'cat-1', 'Silvia', {
+      invalidations: ['voter-0'],
+    });
+    const { scores } = computeCategoryScores(
+      makeSnapshot([target]),
+      cat1,
+      allPlayers,
+    );
+
+    expect(scores.author).toBe(5);
+  });
+
+  it('awards zero points when invalidation exceeds half of eligible votes', () => {
+    const eligibleVoters = Array.from({ length: 10 }, (_, index) => `voter-${index}`);
+    const target = makeAnswer('author', 'cat-1', 'Silvia');
+    target.eligibleVoters = eligibleVoters;
+    target.votes = Object.fromEntries(
+      eligibleVoters.slice(0, 6).map((voterId) => [voterId, 'invalidate']),
+    );
+
+    const { scores } = computeCategoryScores(
+      makeSnapshot([target]),
+      cat1,
+      [{ id: 'author' }, ...eligibleVoters.map((id) => ({ id }))],
+    );
+
+    expect(scores.author).toBe(0);
   });
 });
 
@@ -215,30 +261,44 @@ describe('computeRoundScores', () => {
 // ── resolveInvalidation ────────────────────────────────────────────────────
 
 describe('resolveInvalidation', () => {
-  it('does not invalidate below majority (2 out of 4)', () => {
-    expect(resolveInvalidation(2, 4)).toBe(false);
+  it('keeps full points below 10 percent', () => {
+    expect(resolveInvalidation(0, 10)).toBe(1);
   });
 
-  it('invalidates at exact majority (3 out of 4)', () => {
-    expect(resolveInvalidation(3, 4)).toBe(true);
+  it('halves points at exactly 10 percent', () => {
+    expect(resolveInvalidation(1, 10)).toBe(0.5);
   });
 
-  it('invalidates above majority (2 out of 3)', () => {
-    expect(resolveInvalidation(2, 3)).toBe(true);
+  it('halves points at exactly 50 percent', () => {
+    expect(resolveInvalidation(5, 10)).toBe(0.5);
   });
 
-  it('handles 1 voter correctly', () => {
-    // 1 active player: majority = ceil(1/2) = 1 → 1 vote invalidates
-    expect(resolveInvalidation(1, 1)).toBe(true);
-    expect(resolveInvalidation(0, 1)).toBe(false);
+  it('zeros points above 50 percent', () => {
+    expect(resolveInvalidation(6, 10)).toBe(0);
   });
 
-  it('returns false for 0 active players', () => {
-    expect(resolveInvalidation(0, 0)).toBe(false);
+  it('handles 10-point and 5-point bases with a partial invalidation', () => {
+    const voters = Array.from({ length: 10 }, (_, index) => ({ id: `v${index}` }));
+    const { scores: uniqueScores } = computeCategoryScores(
+      makeSnapshot([makeAnswer('author', 'cat-1', 'Silvia', { invalidations: ['v0'] })]),
+      cat1,
+      [{ id: 'author' }, ...voters],
+    );
+    const { scores: duplicateScores } = computeCategoryScores(
+      makeSnapshot([
+        makeAnswer('author', 'cat-1', 'Silvia', { invalidations: ['v0'] }),
+        makeAnswer('v0', 'cat-1', 'Silvia'),
+      ]),
+      cat1,
+      [{ id: 'author' }, ...voters],
+    );
+
+    expect(uniqueScores.author).toBe(5);
+    expect(duplicateScores.author).toBe(2.5);
   });
 
-  it('does not invalidate with 0 votes', () => {
-    expect(resolveInvalidation(0, 5)).toBe(false);
+  it('returns full score when there are no eligible voters', () => {
+    expect(resolveInvalidation(0, 0)).toBe(1);
   });
 });
 

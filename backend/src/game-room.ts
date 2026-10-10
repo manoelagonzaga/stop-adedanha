@@ -7,9 +7,8 @@ import type {
   ServerEvent,
 } from './types';
 import {
-  computeCategoryScores,
+  passesLetterCheck,
   computeRoundScores,
-  resolveInvalidation,
   buildFinalRanking,
   type RoundSnapshot,
 } from './scoring';
@@ -20,8 +19,14 @@ const MAX_PLAYERS = 20;
 const MAX_COMMAND_BYTES = 16 * 1024;
 const MAX_REQUEST_IDS = 4096;
 const MAX_REQUEST_ID_LENGTH = 128;
+const MAX_NICKNAME_CODE_POINTS = 24;
+const MAX_CATEGORY_CODE_POINTS = 40;
+const MAX_CATEGORIES = 20;
+const RESUME_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_ROUNDS = 5;
-const ROUND_DURATION_MS = 90_000; // 90 seconds per round
+const DEFAULT_ROUND_DURATION_SECONDS = 60;
+const ROUND_DURATIONS = [0, 60, 90, 120] as const;
+const DEFAULT_ALLOWED_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const REVIEW_CATEGORY_DURATION_MS = 30_000; // 30 seconds per category review
 
 const DEFAULT_CATEGORIES: Category[] = [
@@ -30,11 +35,6 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-2', name: 'Animal' },
   { id: 'cat-3', name: 'Comida' },
   { id: 'cat-4', name: 'Objeto' },
-];
-
-const ALLOWED_LETTERS = [
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'L', 'M',
-  'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V',
 ];
 
 // ── Per-round data ─────────────────────────────────────────────────────────────
@@ -46,6 +46,14 @@ interface RoundData {
   stopperId: string | null; // who called stop
   stopTime: number | null;
   submittedPlayers: Set<string>;
+  eligibleVoterIds: string[];
+}
+
+interface ResumeCredential {
+  playerId: string;
+  tokenVerifier: string;
+  issuedAt: number;
+  expiresAt: number;
 }
 
 // ── GameRoom Durable Object ────────────────────────────────────────────────────
@@ -77,12 +85,20 @@ export class GameRoom implements DurableObject {
       categories: DEFAULT_CATEGORIES,
       currentRound: 0,
       totalRounds: DEFAULT_ROUNDS,
+      roundDurationSeconds: DEFAULT_ROUND_DURATION_SECONDS,
+      allowedLetters: [...DEFAULT_ALLOWED_LETTERS],
     };
 
     // Restore persisted state (hibernation support)
     this.state.blockConcurrencyWhile(async () => {
       const persisted = await this.state.storage.get<RoomState>('room');
-      if (persisted) this.room = persisted;
+      if (persisted) {
+        this.room = {
+          ...persisted,
+          roundDurationSeconds: persisted.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
+          allowedLetters: persisted.allowedLetters ?? [...DEFAULT_ALLOWED_LETTERS],
+        };
+      }
     });
   }
 
@@ -262,6 +278,8 @@ export class GameRoom implements DurableObject {
     cmd: ClientCommand
   ): Promise<void> {
     switch (cmd.type) {
+      case 'session:resume':
+        return this.handleSessionResume(socket, playerId, cmd);
       case 'room:create':
         return this.handleRoomCreate(socket, playerId, cmd);
       case 'room:join':
@@ -270,14 +288,16 @@ export class GameRoom implements DurableObject {
         return this.handleCategoriesUpdate(socket, playerId, cmd);
       case 'lobby:rounds:update':
         return this.handleRoundsUpdate(socket, playerId, cmd);
+      case 'lobby:options:update':
+        return this.handleOptionsUpdate(socket, playerId, cmd);
       case 'game:start':
         return this.handleGameStart(socket, playerId, cmd);
       case 'answer:submit':
         return this.handleAnswerSubmit(socket, playerId, cmd);
       case 'round:stop':
         return this.handleRoundStop(socket, playerId, cmd);
-      case 'answer:invalidate':
-        return this.handleAnswerInvalidate(socket, playerId, cmd);
+      case 'answer:vote':
+        return this.handleAnswerVote(socket, playerId, cmd);
       default:
         this.sendError(socket, 'UNKNOWN_COMMAND', 'Unknown command type', cmd.requestId);
     }
@@ -288,7 +308,14 @@ export class GameRoom implements DurableObject {
   private async handleRoomCreate(
     socket: WebSocket,
     playerId: string,
-    cmd: { type: 'room:create'; requestId: string; nickname: string; totalRounds?: number }
+    cmd: {
+      type: 'room:create';
+      requestId: string;
+      nickname: string;
+      totalRounds?: number;
+      roundDurationSeconds?: 0 | 60 | 90 | 120;
+      allowedLetters?: string[];
+    }
   ): Promise<void> {
     const requestedCode = this.sessionRoomCodes.get(socket);
     if (!this.room.code || !requestedCode || requestedCode !== this.room.code) {
@@ -301,8 +328,15 @@ export class GameRoom implements DurableObject {
     }
 
     const nickname = cmd.nickname.trim();
-    if (!nickname) {
-      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname is required', cmd.requestId);
+    if (!this.isValidNickname(nickname)) {
+      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname must contain 1 to 24 characters', cmd.requestId);
+      return;
+    }
+    const roundDurationSeconds = cmd.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS;
+    const allowedLetters = cmd.allowedLetters ?? DEFAULT_ALLOWED_LETTERS;
+    const normalizedAllowedLetters = this.validateAllowedLetters(allowedLetters);
+    if (!this.isValidRoundDuration(roundDurationSeconds) || !normalizedAllowedLetters) {
+      this.sendError(socket, 'INVALID_CONFIGURATION', 'Round duration or allowed letters are invalid', cmd.requestId);
       return;
     }
 
@@ -321,10 +355,13 @@ export class GameRoom implements DurableObject {
       categories: DEFAULT_CATEGORIES,
       currentRound: 0,
       totalRounds: cmd.totalRounds ?? DEFAULT_ROUNDS,
+      roundDurationSeconds,
+      allowedLetters: normalizedAllowedLetters,
     };
 
     await this.persistRoom();
     this.broadcastRoomState();
+    await this.issueResumeCredential(socket, playerId, cmd.requestId);
   }
 
   // ── Room: Join ─────────────────────────────────────────────────────────────
@@ -351,12 +388,12 @@ export class GameRoom implements DurableObject {
 
     const nickname = cmd.nickname.trim();
 
-    if (!nickname) {
-      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname is required', cmd.requestId);
+    if (!this.isValidNickname(nickname)) {
+      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname must contain 1 to 24 characters', cmd.requestId);
       return;
     }
 
-    if (this.room.players.length >= MAX_PLAYERS) {
+    if (this.room.players.filter((player) => player.status === 'active').length >= MAX_PLAYERS) {
       this.sendError(socket, 'ROOM_FULL', 'Room is full', cmd.requestId);
       return;
     }
@@ -399,6 +436,150 @@ export class GameRoom implements DurableObject {
     });
 
     this.broadcastRoomState();
+    await this.issueResumeCredential(socket, playerId, cmd.requestId);
+  }
+
+  private async handleSessionResume(
+    socket: WebSocket,
+    temporaryPlayerId: string,
+    cmd: Extract<ClientCommand, { type: 'session:resume' }>,
+  ): Promise<void> {
+    if (!cmd.resumeToken || cmd.resumeToken.length > 256) {
+      this.sendError(socket, 'SESSION_INVALID', 'This room session is invalid or expired', cmd.requestId);
+      return;
+    }
+
+    const tokenVerifier = await this.hashResumeToken(cmd.resumeToken);
+    const credentials = await this.state.storage.get<ResumeCredential[]>('resumeCredentials') ?? [];
+    const now = Date.now();
+    const credential = credentials.find(
+      (entry) => entry.tokenVerifier === tokenVerifier && entry.expiresAt > now,
+    );
+    const player = credential
+      ? this.room.players.find((entry) => entry.id === credential.playerId)
+      : undefined;
+    if (!credential || !player) {
+      const remaining = credentials.filter((entry) => entry.expiresAt > now);
+      await this.state.storage.put('resumeCredentials', remaining);
+      this.sendError(socket, 'SESSION_INVALID', 'This room session is invalid or expired', cmd.requestId);
+      return;
+    }
+
+    for (const [existingSocket, existingPlayerId] of this.sessions) {
+      if (existingPlayerId === player.id && existingSocket !== socket) {
+        this.sessions.delete(existingSocket);
+        this.sessionRoomCodes.delete(existingSocket);
+        this.negotiatedSockets.delete(existingSocket);
+        try {
+          existingSocket.close(1000, 'Session resumed on another connection');
+        } catch (error) {
+          console.error('[GameRoom] Failed to close replaced session:', error);
+        }
+      }
+    }
+
+    this.sessions.set(socket, player.id);
+    player.status = 'active';
+    const rotatedToken = await this.rotateResumeCredential(credentials, credential, now);
+    await this.persistRoom();
+
+    this.sendTo(socket, {
+      type: 'session:resumed',
+      requestId: cmd.requestId,
+      playerId: player.id,
+      resumeToken: rotatedToken,
+      state: this.room,
+    });
+    this.broadcast({
+      type: 'player:presence',
+      id: player.id,
+      nickname: player.nickname,
+      status: 'active',
+    });
+    this.broadcastRoomState();
+    this.replayCurrentPhase(socket);
+  }
+
+  private async issueResumeCredential(
+    socket: WebSocket,
+    playerId: string,
+    requestId: string,
+  ): Promise<void> {
+    const now = Date.now();
+    const token = this.createResumeToken();
+    const credentials = (await this.state.storage.get<ResumeCredential[]>('resumeCredentials') ?? [])
+      .filter((entry) => entry.expiresAt > now && entry.playerId !== playerId);
+    credentials.push({
+      playerId,
+      tokenVerifier: await this.hashResumeToken(token),
+      issuedAt: now,
+      expiresAt: now + RESUME_TOKEN_TTL_MS,
+    });
+    await this.state.storage.put('resumeCredentials', credentials);
+    this.sendTo(socket, {
+      type: 'room:joined',
+      requestId,
+      playerId,
+      resumeToken: token,
+    });
+  }
+
+  private async rotateResumeCredential(
+    credentials: ResumeCredential[],
+    current: ResumeCredential,
+    now: number,
+  ): Promise<string> {
+    const token = this.createResumeToken();
+    const updated = credentials.filter(
+      (entry) => entry.expiresAt > now && entry.playerId !== current.playerId,
+    );
+    updated.push({
+      playerId: current.playerId,
+      tokenVerifier: await this.hashResumeToken(token),
+      issuedAt: now,
+      expiresAt: now + RESUME_TOKEN_TTL_MS,
+    });
+    await this.state.storage.put('resumeCredentials', updated);
+    return token;
+  }
+
+  private createResumeToken(): string {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  private async hashResumeToken(token: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  private replayCurrentPhase(socket: WebSocket): void {
+    const round = this.currentRoundData;
+    if (!round) return;
+
+    if (this.room.phase === 'ROUND_ACTIVE') {
+      this.sendTo(socket, {
+        type: 'round:started',
+        id: round.id,
+        roundId: round.id,
+        roundNumber: this.room.currentRound,
+        letter: round.letter,
+        categories: this.room.categories,
+        deadline: this.room.roundDeadline,
+      });
+    } else if (this.room.phase === 'CATEGORY_REVIEW') {
+      const event = this.buildCategoryReviewEvent(
+        round,
+        this.room.currentReviewCategoryIndex ?? 0,
+      );
+      if (event) this.sendTo(socket, event);
+    } else if (this.room.phase === 'ROUND_RESULTS') {
+      this.sendTo(socket, {
+        type: 'round:results',
+        answers: Array.from(round.answers.values()),
+        ranking: [...this.room.players].sort((a, b) => b.score - a.score),
+      });
+    }
   }
 
   // ── Lobby: Update Categories ───────────────────────────────────────────────
@@ -408,14 +589,22 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: { type: 'lobby:categories:update'; requestId: string; categories: string[] }
   ): Promise<void> {
-    if (!this.isHost(playerId)) {
-      this.sendError(socket, 'NOT_HOST', 'Only the host can update categories', cmd.requestId);
+    if (!this.validateLobbyMutation(socket, playerId, cmd.requestId)) {
       return;
     }
 
-    this.room.categories = cmd.categories
-      .filter((c) => c.trim().length > 0)
-      .map((name, i) => ({ id: `cat-${i}`, name: name.trim() }));
+    const categories = this.validateCategories(cmd.categories);
+    if (!categories) {
+      this.sendError(
+        socket,
+        'INVALID_CONFIGURATION',
+        'Choose 1 to 20 unique category names, each 1 to 40 characters long',
+        cmd.requestId,
+      );
+      return;
+    }
+
+    this.room.categories = categories.map((name, index) => ({ id: `cat-${index}`, name }));
 
     await this.persistRoom();
     this.broadcastRoomState();
@@ -428,12 +617,47 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: { type: 'lobby:rounds:update'; requestId: string; totalRounds: number }
   ): Promise<void> {
-    if (!this.isHost(playerId)) {
-      this.sendError(socket, 'NOT_HOST', 'Only the host can update rounds', cmd.requestId);
+    if (!this.validateLobbyMutation(socket, playerId, cmd.requestId)) {
       return;
     }
 
-    this.room.totalRounds = Math.max(1, Math.min(20, cmd.totalRounds));
+    if (!Number.isInteger(cmd.totalRounds) || cmd.totalRounds < 1 || cmd.totalRounds > 20) {
+      this.sendError(
+        socket,
+        'INVALID_CONFIGURATION',
+        'Round count must be an integer from 1 to 20',
+        cmd.requestId,
+      );
+      return;
+    }
+
+    this.room.totalRounds = cmd.totalRounds;
+    await this.persistRoom();
+    this.broadcastRoomState();
+  }
+
+  private async handleOptionsUpdate(
+    socket: WebSocket,
+    playerId: string,
+    cmd: Extract<ClientCommand, { type: 'lobby:options:update' }>,
+  ): Promise<void> {
+    if (!this.validateLobbyMutation(socket, playerId, cmd.requestId)) {
+      return;
+    }
+
+    const allowedLetters = this.validateAllowedLetters(cmd.allowedLetters);
+    if (!this.isValidRoundDuration(cmd.roundDurationSeconds) || !allowedLetters) {
+      this.sendError(
+        socket,
+        'INVALID_CONFIGURATION',
+        'Choose a duration of 0, 60, 90, or 120 seconds and at least one unique letter from A to Z',
+        cmd.requestId,
+      );
+      return;
+    }
+
+    this.room.roundDurationSeconds = cmd.roundDurationSeconds;
+    this.room.allowedLetters = allowedLetters;
     await this.persistRoom();
     this.broadcastRoomState();
   }
@@ -450,8 +674,25 @@ export class GameRoom implements DurableObject {
       return;
     }
 
-    if (this.room.players.filter((p) => p.status === 'active').length < 1) {
-      this.sendError(socket, 'NOT_ENOUGH_PLAYERS', 'Need at least 1 player to start', cmd.requestId);
+    if (this.room.phase !== 'CONFIGURING') {
+      this.sendError(socket, 'INVALID_PHASE', 'The game can only start during configuration', cmd.requestId);
+      return;
+    }
+
+    if (this.room.players.filter((player) => player.status === 'active').length < 2) {
+      this.sendError(socket, 'NOT_ENOUGH_PLAYERS', 'At least two active players are required', cmd.requestId);
+      return;
+    }
+
+    if (
+      !Number.isInteger(this.room.totalRounds) ||
+      this.room.totalRounds < 1 ||
+      this.room.totalRounds > 20 ||
+      !this.validateCategories(this.room.categories.map((category) => category.name)) ||
+      !this.isValidRoundDuration(this.room.roundDurationSeconds) ||
+      !this.validateAllowedLetters(this.room.allowedLetters)
+    ) {
+      this.sendError(socket, 'INVALID_CONFIGURATION', 'Room settings are not valid', cmd.requestId);
       return;
     }
 
@@ -470,12 +711,19 @@ export class GameRoom implements DurableObject {
 
     const letter = this.pickLetter();
     const roundId = `round-${nextRound}`;
-    const deadline = Date.now() + ROUND_DURATION_MS;
+    const duration = this.room.roundDurationSeconds;
+    if (!this.isValidRoundDuration(duration)) {
+      throw new Error('Room has no valid round duration configuration');
+    }
+    const deadline = duration === 0 ? undefined : Date.now() + duration * 1000;
 
     this.room.phase = 'ROUND_ACTIVE';
     this.room.currentRound = nextRound;
     this.room.currentLetter = letter;
     this.room.roundDeadline = deadline;
+    this.room.currentRoundId = roundId;
+    this.room.reviewDeadline = undefined;
+    this.room.currentReviewCategoryIndex = undefined;
 
     const roundData: RoundData = {
       id: roundId,
@@ -484,6 +732,7 @@ export class GameRoom implements DurableObject {
       stopperId: null,
       stopTime: null,
       submittedPlayers: new Set(),
+      eligibleVoterIds: [],
     };
     this.rounds.set(roundId, roundData);
     this.currentRoundData = roundData;
@@ -493,13 +742,19 @@ export class GameRoom implements DurableObject {
     this.broadcast({
       type: 'round:started',
       id: roundId,
+      roundId,
+      roundNumber: nextRound,
       letter,
       categories: this.room.categories,
       deadline,
     });
 
     // Auto-expire round after deadline
-    this.state.storage.setAlarm(deadline);
+    if (deadline !== undefined) {
+      await this.state.storage.setAlarm(deadline);
+    } else {
+      await this.state.storage.deleteAlarm();
+    }
   }
 
   // ── Answer: Submit ─────────────────────────────────────────────────────────
@@ -509,17 +764,48 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: { type: 'answer:submit'; requestId: string; roundId: string; answers: Record<string, string> }
   ): Promise<void> {
-    const roundData = this.rounds.get(cmd.roundId) ?? this.currentRoundData;
-    if (!roundData || this.room.phase !== 'ROUND_ACTIVE') return;
+    const roundData = this.currentRoundData;
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'INVALID_ANSWER', 'Only active players can submit answers', cmd.requestId);
+      return;
+    }
+    if (
+      this.room.phase !== 'ROUND_ACTIVE' ||
+      !roundData ||
+      cmd.roundId !== roundData.id ||
+      this.room.currentRoundId !== roundData.id
+    ) {
+      this.sendError(socket, 'ROUND_CLOSED', 'This round is no longer accepting answers', cmd.requestId);
+      return;
+    }
+    if (this.room.roundDeadline !== undefined && Date.now() >= this.room.roundDeadline) {
+      await this.beginCategoryReview(roundData);
+      this.sendError(socket, 'ROUND_CLOSED', 'The round deadline has passed', cmd.requestId);
+      return;
+    }
+    if (
+      !cmd.answers ||
+      typeof cmd.answers !== 'object' ||
+      Array.isArray(cmd.answers) ||
+      Object.entries(cmd.answers).some(
+        ([categoryId, value]) =>
+          !this.room.categories.some((category) => category.id === categoryId) ||
+          typeof value !== 'string',
+      )
+    ) {
+      this.sendError(socket, 'INVALID_ANSWER', 'Answers must contain only known categories and text values', cmd.requestId);
+      return;
+    }
 
-    // Store answers (can be updated until stop)
     for (const [categoryId, value] of Object.entries(cmd.answers)) {
+      const normalizedValue = value.trim().toUpperCase();
       const key = `${playerId}:${categoryId}`;
       roundData.answers.set(key, {
         playerId,
         categoryId,
-        value: value.trim().toUpperCase(),
-        isValid: true,
+        value: normalizedValue,
+        isValid: passesLetterCheck(normalizedValue, roundData.letter),
         invalidations: [],
         score: 0,
       });
@@ -535,17 +821,29 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: { type: 'round:stop'; requestId: string; roundId: string }
   ): Promise<void> {
-    const roundData = this.rounds.get(cmd.roundId) ?? this.currentRoundData;
-    if (!roundData || this.room.phase !== 'ROUND_ACTIVE') return;
-
-    // First stop wins
-    if (!roundData.stopperId) {
-      roundData.stopperId = playerId;
-      roundData.stopTime = Date.now();
+    const roundData = this.currentRoundData;
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'INVALID_PHASE', 'Only active players can stop the round', cmd.requestId);
+      return;
+    }
+    if (
+      this.room.phase !== 'ROUND_ACTIVE' ||
+      !roundData ||
+      cmd.roundId !== roundData.id ||
+      this.room.currentRoundId !== roundData.id
+    ) {
+      this.sendError(socket, 'ROUND_CLOSED', 'This round is already closed', cmd.requestId);
+      return;
+    }
+    if (this.room.roundDeadline !== undefined && Date.now() >= this.room.roundDeadline) {
+      await this.beginCategoryReview(roundData);
+      this.sendError(socket, 'ROUND_CLOSED', 'The round deadline has passed', cmd.requestId);
+      return;
     }
 
-    // Give all players a short grace period (2s) to submit final answers
-    // then move to review
+    roundData.stopperId = playerId;
+    roundData.stopTime = Date.now();
     await this.beginCategoryReview(roundData);
   }
 
@@ -553,104 +851,146 @@ export class GameRoom implements DurableObject {
 
   private async beginCategoryReview(roundData: RoundData): Promise<void> {
     this.room.phase = 'CATEGORY_REVIEW';
+    this.room.roundDeadline = undefined;
     this.room.currentReviewCategoryIndex = 0;
+    this.room.reviewDeadline = undefined;
+    roundData.eligibleVoterIds = this.room.players
+      .filter((player) => player.status === 'active')
+      .map((player) => player.id);
+    for (const answer of roundData.answers.values()) {
+      answer.eligibleVoters = roundData.eligibleVoterIds.filter(
+        (voterId) => voterId !== answer.playerId,
+      );
+      answer.votes ??= {};
+    }
     await this.persistRoom();
     await this.broadcastCategoryReview(roundData, 0);
   }
 
   private async broadcastCategoryReview(roundData: RoundData, categoryIndex: number): Promise<void> {
-    const category = this.room.categories[categoryIndex];
-    if (!category) {
+    const event = this.buildCategoryReviewEvent(roundData, categoryIndex);
+    if (!event) {
       // All categories reviewed — show final results for round
       await this.computeRoundScoresAndAdvance(roundData);
       return;
     }
 
-    const deadline = Date.now() + REVIEW_CATEGORY_DURATION_MS;
+    this.broadcast(event);
+
+    // Auto-advance category after deadline
+    if (event.deadline) this.state.storage.setAlarm(event.deadline);
+  }
+
+  private buildCategoryReviewEvent(
+    roundData: RoundData,
+    categoryIndex: number,
+  ): Extract<ServerEvent, { type: 'round:review:category' }> | null {
+    const category = this.room.categories[categoryIndex];
+    if (!category) return null;
+
+    const deadline = this.room.reviewDeadline ?? Date.now() + REVIEW_CATEGORY_DURATION_MS;
     this.room.reviewDeadline = deadline;
     this.room.currentReviewCategoryIndex = categoryIndex;
+    const answers: Answer[] = roundData.eligibleVoterIds
+      .map((playerId) => this.room.players.find((player) => player.id === playerId))
+      .filter((player): player is Player => Boolean(player))
+      .map((player) =>
+        roundData.answers.get(`${player.id}:${category.id}`) ?? {
+          playerId: player.id,
+          categoryId: category.id,
+          value: '',
+          isValid: false,
+          invalidations: [],
+          votes: {},
+          eligibleVoters: roundData.eligibleVoterIds.filter((voterId) => voterId !== player.id),
+          score: 0,
+        })
+      .map((answer) => ({
+        ...answer,
+        votes: answer.votes ?? {},
+        eligibleVoters: roundData.eligibleVoterIds.filter((voterId) => voterId !== answer.playerId),
+      }));
 
-    // Collect answers for this category from all active players
-    const answers: import('./types').Answer[] = this.room.players
-      .filter((p) => p.status === 'active')
-      .map((p) => {
-        const key = `${p.id}:${category.id}`;
-        return (
-          roundData.answers.get(key) ?? {
-            playerId: p.id,
-            categoryId: category.id,
-            value: '',
-            isValid: false,
-            invalidations: [],
-            score: 0,
-          }
-        );
-      });
-
-    this.broadcast({
+    return {
       type: 'round:review:category',
       categoryIndex,
       totalCategories: this.room.categories.length,
       category,
       answers,
-      eligibleVoters: this.room.players.filter((p) => p.status === 'active').length,
+      eligibleVoters: roundData.eligibleVoterIds.length,
       deadline,
-    });
-
-    // Auto-advance category after deadline
-    this.state.storage.setAlarm(deadline);
+    };
   }
 
-  // ── Answer: Invalidate ─────────────────────────────────────────────────────
+  // ── Answer: Vote ───────────────────────────────────────────────────────────
 
-  private async handleAnswerInvalidate(
+  private async handleAnswerVote(
     socket: WebSocket,
     playerId: string,
-    cmd: { type: 'answer:invalidate'; requestId: string; roundId: string; categoryId: string; answerId: string }
+    cmd: Extract<ClientCommand, { type: 'answer:vote' }>,
   ): Promise<void> {
-    const roundData = this.rounds.get(cmd.roundId) ?? this.currentRoundData;
-    if (!roundData || this.room.phase !== 'CATEGORY_REVIEW') return;
-
-    // answerId is "playerId-categoryId" from client
-    const parts = cmd.answerId.split('-');
-    const targetPlayerId = parts[0];
-    const key = `${targetPlayerId}:${cmd.categoryId}`;
-
-    const answer = roundData.answers.get(key);
-    if (!answer) return;
-
-    // Toggle vote
-    const alreadyVoted = answer.invalidations.includes(playerId);
-    if (alreadyVoted) {
-      answer.invalidations = answer.invalidations.filter((id) => id !== playerId);
-    } else {
-      answer.invalidations.push(playerId);
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Only active room players may vote', cmd.requestId);
+      return;
     }
 
-    // Calculate if invalidated using scoring helper (majority vote)
-    const activePlayers = this.room.players.filter((p) => p.status === 'active').length;
-    answer.isValid = !resolveInvalidation(answer.invalidations.length, activePlayers);
+    const roundData = this.currentRoundData;
+    if (
+      this.room.phase !== 'CATEGORY_REVIEW' ||
+      !roundData ||
+      cmd.roundId !== roundData.id ||
+      this.room.currentRoundId !== roundData.id
+    ) {
+      this.sendError(socket, 'ROUND_CLOSED', 'This round is not accepting votes', cmd.requestId);
+      return;
+    }
+    if (this.room.reviewDeadline !== undefined && Date.now() >= this.room.reviewDeadline) {
+      this.sendError(socket, 'ROUND_CLOSED', 'The active category deadline has passed', cmd.requestId);
+      return;
+    }
 
-    // Broadcast live score update for current category
-    const categoryIndex = this.room.currentReviewCategoryIndex ?? 0;
-    const catScores = this._computeCategoryScores(roundData, this.room.categories[categoryIndex]);
+    const currentCategory = this.room.categories[this.room.currentReviewCategoryIndex ?? -1];
+    if (!currentCategory || cmd.categoryId !== currentCategory.id) {
+      this.sendError(socket, 'INVALID_VOTE', 'Votes are accepted only for the active category', cmd.requestId);
+      return;
+    }
+    if (cmd.decision !== 'valid' && cmd.decision !== 'invalidate') {
+      this.sendError(socket, 'INVALID_VOTE', 'Vote decision must be valid or invalidate', cmd.requestId);
+      return;
+    }
+    if (!roundData.eligibleVoterIds.includes(playerId)) {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'This player is not eligible to vote in this review', cmd.requestId);
+      return;
+    }
 
-    this.broadcast({
-      type: 'round:review:score_update',
-      categoryIndex,
-      categoryScores: catScores,
-      scoreboard: this.room.players,
-    });
-  }
+    const answer = roundData.answers.get(`${cmd.answerPlayerId}:${cmd.categoryId}`);
+    if (!answer || !answer.isValid || !answer.value.trim()) {
+      this.sendError(socket, 'INVALID_VOTE', 'The target answer is not eligible for voting', cmd.requestId);
+      return;
+    }
+    if (answer.playerId === playerId) {
+      this.sendError(socket, 'SELF_VOTE', 'Players cannot vote on their own answers', cmd.requestId);
+      return;
+    }
 
-  // ── Score Computation (delegates to scoring.ts) ────────────────────────────
+    const eligibleVoters = roundData.eligibleVoterIds.filter((voterId) => voterId !== answer.playerId);
+    if (!eligibleVoters.includes(playerId)) {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'The answer author is excluded from its eligible voters', cmd.requestId);
+      return;
+    }
 
-  private _computeCategoryScores(
-    roundData: RoundData,
-    category: Category | undefined
-  ): Record<string, number> {
-    if (!category) return {};
-    return computeCategoryScores(roundData, category, this.room.players).scores;
+    answer.eligibleVoters = eligibleVoters;
+    answer.votes = { ...answer.votes, [playerId]: cmd.decision };
+    answer.invalidations = Object.entries(answer.votes)
+      .filter(([voterId, decision]) => eligibleVoters.includes(voterId) && decision === 'invalidate')
+      .map(([voterId]) => voterId);
+
+    const event = this.buildCategoryReviewEvent(
+      roundData,
+      this.room.currentReviewCategoryIndex ?? 0,
+    );
+    if (event) this.broadcast(event);
   }
 
   private async computeRoundScoresAndAdvance(roundData: RoundData): Promise<void> {
@@ -700,8 +1040,8 @@ export class GameRoom implements DurableObject {
   async alarm(): Promise<void> {
     const now = Date.now();
 
-    if (this.room.phase === 'ROUND_ACTIVE' && this.room.roundDeadline) {
-      if (now >= this.room.roundDeadline - 1000) {
+    if (this.room.phase === 'ROUND_ACTIVE' && this.room.roundDeadline !== undefined) {
+      if (now >= this.room.roundDeadline) {
         // Round timer expired — move to review
         if (this.currentRoundData) {
           await this.beginCategoryReview(this.currentRoundData);
@@ -716,6 +1056,7 @@ export class GameRoom implements DurableObject {
         const nextIdx = (this.room.currentReviewCategoryIndex ?? 0) + 1;
         if (nextIdx < this.room.categories.length) {
           this.room.currentReviewCategoryIndex = nextIdx;
+          this.room.reviewDeadline = undefined;
           if (this.currentRoundData) {
             await this.broadcastCategoryReview(this.currentRoundData, nextIdx);
           }
@@ -730,6 +1071,61 @@ export class GameRoom implements DurableObject {
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
+
+  private isValidNickname(nickname: string): boolean {
+    const length = Array.from(nickname).length;
+    return length > 0 && length <= MAX_NICKNAME_CODE_POINTS;
+  }
+
+  private isValidRoundDuration(duration: unknown): duration is 0 | 60 | 90 | 120 {
+    return typeof duration === 'number' && ROUND_DURATIONS.some((value) => value === duration);
+  }
+
+  private validateAllowedLetters(letters: unknown): string[] | null {
+    if (
+      !Array.isArray(letters) ||
+      letters.length < 1 ||
+      letters.length > DEFAULT_ALLOWED_LETTERS.length ||
+      !letters.every((letter): letter is string => typeof letter === 'string' && /^[A-Z]$/.test(letter)) ||
+      new Set(letters).size !== letters.length
+    ) {
+      return null;
+    }
+    return [...letters];
+  }
+
+  private validateCategories(categories: unknown): string[] | null {
+    if (
+      !Array.isArray(categories) ||
+      categories.length < 1 ||
+      categories.length > MAX_CATEGORIES ||
+      !categories.every((category): category is string => typeof category === 'string')
+    ) {
+      return null;
+    }
+
+    const normalized = categories.map((category) => category.trim());
+    const names = new Set<string>();
+    for (const name of normalized) {
+      const length = Array.from(name).length;
+      const key = name.toLowerCase();
+      if (length < 1 || length > MAX_CATEGORY_CODE_POINTS || names.has(key)) return null;
+      names.add(key);
+    }
+    return normalized;
+  }
+
+  private validateLobbyMutation(socket: WebSocket, playerId: string, requestId: string): boolean {
+    if (!this.isHost(playerId)) {
+      this.sendError(socket, 'NOT_HOST', 'Only the host can update room settings', requestId);
+      return false;
+    }
+    if (this.room.phase !== 'CONFIGURING') {
+      this.sendError(socket, 'INVALID_PHASE', 'Room settings can only change during configuration', requestId);
+      return false;
+    }
+    return true;
+  }
 
   private isHost(playerId: string): boolean {
     return this.room.players.some((p) => p.id === playerId && p.isHost);
@@ -809,6 +1205,8 @@ export class GameRoom implements DurableObject {
   }
 
   private pickLetter(): string {
-    return ALLOWED_LETTERS[Math.floor(Math.random() * ALLOWED_LETTERS.length)];
+    const letters = this.validateAllowedLetters(this.room.allowedLetters);
+    if (!letters) throw new Error('Room has no valid allowed-letter configuration');
+    return letters[Math.floor(Math.random() * letters.length)];
   }
 }

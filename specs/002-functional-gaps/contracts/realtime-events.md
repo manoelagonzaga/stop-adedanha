@@ -13,6 +13,7 @@ This contract supersedes conflicting examples in the original realtime document 
 - The first command is `session:hello` with protocol version 1. Unsupported versions receive `PROTOCOL_UNSUPPORTED`; mutations before successful negotiation receive `PROTOCOL_REQUIRED`.
 - Errors include a stable `code`, safe user-facing `message`, and the originating `requestId` when available.
 - Resume credentials are private to one player and must not appear in URLs, room snapshots, or broadcasts.
+- Resume credentials expire 30 days after issue. A successful resume rotates the credential and revokes its predecessor.
 
 ## HTTP boundary
 
@@ -96,7 +97,7 @@ Host-only during configuration. Value is an integer from 1 through 20. Existing 
 { "type": "lobby:options:update", "requestId": "r6", "roundDurationSeconds": 90, "allowedLetters": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"] }
 ```
 
-Host-only during configuration. Duration is 60, 90, 120, or 0 (unlimited). `allowedLetters` must contain at least one uppercase letter from A-Z; the default is A-Z.
+Host-only during configuration. Duration is 60 (the default), 90, 120, or 0 (unlimited). `allowedLetters` must contain at least one unique uppercase letter from A-Z; the default is A-Z.
 
 ### `game:start`
 
@@ -112,7 +113,7 @@ Host-only. Requires at least two active players and valid categories/options. Se
 { "type": "answer:submit", "requestId": "r8", "roundId": "round-1", "answers": { "cat-0": "Ana", "cat-1": "Arara" } }
 ```
 
-One update per player/category is permitted until the authoritative cutoff. Server validates active membership, round, category, deadline, normalization, and first letter.
+Clients may send incremental answer snapshots while a round is active. The server validates active membership, exact current round, known categories, text values, and the exclusive server deadline; it trims and uppercases each answer and marks it valid only when it is non-empty and starts with the round letter. Unknown categories or malformed values return `INVALID_ANSWER`; submissions for a stale/closed round or at/after the deadline return `ROUND_CLOSED`. A rejected snapshot is atomic and does not partially replace prior answers.
 
 ### `round:stop`
 
@@ -120,7 +121,7 @@ One update per player/category is permitted until the authoritative cutoff. Serv
 { "type": "round:stop", "requestId": "r9", "roundId": "round-1" }
 ```
 
-Any active player may request Stop during `ROUND_ACTIVE`. The first serialized request wins the bonus; the server closes submissions once and begins review.
+Any active player may request Stop during `ROUND_ACTIVE`. The first serialized request before the deadline wins the bonus; the server closes submissions once and begins review. A submission processed before Stop is retained; submissions processed after the cutoff are rejected. If Stop arrives at/after the deadline, the server begins timeout review without awarding the Stop bonus.
 
 ### `answer:vote`
 
@@ -162,7 +163,7 @@ Confirms a committed command with its `requestId`. The UI marks pending controls
 
 ### `round:started`
 
-Contains `roundId`, round number, letter, category snapshot, and optional deadline. All clients receive the same values.
+Contains the stable round ID, round number, letter, category snapshot, and optional deadline. All clients receive the same values.
 
 ### `round:review:category`
 

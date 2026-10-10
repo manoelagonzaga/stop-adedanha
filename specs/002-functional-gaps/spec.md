@@ -105,6 +105,7 @@ Os itens abaixo descrevem o trabalho que falta, em ordem de prioridade. Cada ite
 - Normalizar a resposta e aplicar a validação de preenchimento e letra inicial usando a letra da rodada no servidor.
 - Garantir que respostas vazias ou com letra incorreta não recebam pontos automáticos.
 - Definir um único corte de submissão para STOP e timeout. O envio final de respostas e STOP deve ser processado em ordem determinística, sem aceitar alterações após o encerramento.
+- Enviar atualizações incrementais de respostas para que o servidor retenha as respostas de todos os jogadores quando outra pessoa acionar STOP.
 - Tornar o comportamento do timeout coerente com a configuração escolhida no lobby.
 
 **Critérios de aceite:**

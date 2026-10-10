@@ -18,7 +18,7 @@
 
 ## Decision 3 — Authoritative configuration and deadlines
 
-**Decision:** Store round count, selected round duration, and allowed-letter exclusions in room state. Accept only the existing UI choices (3/5/8/10 rounds; 60/90/120 seconds or no limit) and validate them again in the Durable Object. The default allowed-letter set is A-Z; exclusions are applied by the server. Send an absolute deadline when a timer is enabled; omit it for no-limit games. Keep the current 30-second review deadline per category.
+**Decision:** Store round count, selected round duration, and allowed-letter exclusions in room state. Accept only the existing UI choices (3/5/8/10 rounds; 60/90/120 seconds or no limit) and validate them again in the Durable Object. Default the round duration to 60 seconds to preserve the lobby's existing selected value. The default allowed-letter set is A-Z; exclusions are applied by the server. Send an absolute deadline when a timer is enabled; omit it for no-limit games. Keep the current 30-second review deadline per category.
 
 **Rationale:** The current lobby already exposes these choices, but time and letter selection are component-local and the server uses a separate fixed duration/letter set. Restricting values to choices already in the UI avoids inventing new product options. A missing deadline gives “Sem Fim” a direct, deterministic meaning; STOP still ends the round.
 

@@ -61,14 +61,14 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Add tests for private token delivery, invalid/expired token rejection, token rotation, duplicate-session handling, and same-player resume in `backend/src/test/game-room.test.ts`
+- [X] T011 [P] [US2] Add tests for private token delivery, invalid/expired token rejection, token rotation, duplicate-session handling, and same-player resume in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T012 [US2] Issue cryptographically random room-scoped resume tokens, persist only verifiers with owner/expiry metadata, and emit private `room:joined` or `session:resumed` events in `backend/src/game-room.ts`
-- [ ] T013 [US2] Rebind a resumed WebSocket to the existing player and replay the phase-specific round/review/results event after sending the authoritative snapshot in `backend/src/game-room.ts`
-- [ ] T014 [US2] Save and rotate the resume credential per room, send `session:hello` and `session:resume` on reconnect, and restore the player state in `frontend/src/hooks/useGameSocket.ts`
-- [ ] T015 [US2] Add reconnect UI state and recoverable invalid-session handling without creating a second player in `frontend/src/App.tsx`
+- [X] T012 [US2] Issue cryptographically random room-scoped resume tokens, persist only verifiers with owner/expiry metadata, and emit private `room:joined` or `session:resumed` events in `backend/src/game-room.ts`
+- [X] T013 [US2] Rebind a resumed WebSocket to the existing player and replay the phase-specific round/review/results event after sending the authoritative snapshot in `backend/src/game-room.ts`
+- [X] T014 [US2] Save and rotate the resume credential per room, send `session:hello` and `session:resume` on reconnect, and restore the player state in `frontend/src/hooks/useGameSocket.ts`
+- [X] T015 [US2] Add reconnect UI state and recoverable invalid-session handling without creating a second player in `frontend/src/App.tsx`
 
 **Checkpoint**: Repeated reconnects retain one room-scoped identity and do not lose in-progress game state.
 
@@ -82,14 +82,14 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 3
 
-- [ ] T016 [P] [US3] Add tests for host/phase validation, round bounds, category normalization/uniqueness, and the two-active-player start minimum in `backend/src/test/game-room.test.ts`
+- [X] T016 [P] [US3] Add tests for host/phase validation, round bounds, category normalization/uniqueness, and the two-active-player start minimum in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Enforce category limits (1-20 categories; trimmed non-empty names up to 40 Unicode code points, unique case-insensitively) and nickname limit (24 Unicode code points) in `backend/src/game-room.ts`
-- [ ] T018 [US3] Validate `lobby:rounds:update` as an integer from 1 through 20, allow it only for the host in `CONFIGURING`, and require two active players plus valid configuration in `backend/src/game-room.ts`
-- [ ] T019 [US3] Send round-count changes to the server and remove the local-only optimistic value in `frontend/src/App.tsx`
-- [ ] T020 [US3] Render configuration from confirmed room snapshots and show validation errors without reporting rejected settings as saved in `frontend/src/screens/LobbyScreen.tsx`
+- [X] T017 [US3] Enforce category limits (1-20 categories; trimmed non-empty names up to 40 Unicode code points, unique case-insensitively) and nickname limit (24 Unicode code points) in `backend/src/game-room.ts`
+- [X] T018 [US3] Validate `lobby:rounds:update` as an integer from 1 through 20, allow it only for the host in `CONFIGURING`, and require two active players plus valid configuration in `backend/src/game-room.ts`
+- [X] T019 [US3] Send round-count changes to the server and remove the local-only optimistic value in `frontend/src/App.tsx`
+- [X] T020 [US3] Render configuration from confirmed room snapshots and show validation errors without reporting rejected settings as saved in `frontend/src/screens/LobbyScreen.tsx`
 
 **Checkpoint**: Host-only validated settings are shared; invalid settings cannot start a game even through a crafted socket command.
 
@@ -103,14 +103,14 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 4
 
-- [ ] T021 [P] [US4] Add tests for allowed duration values (60, 90, 120, 0), A-Z defaults, non-empty allowed-letter validation, server letter draw, absent deadline for unlimited mode, and the 30-second review deadline per category in `backend/src/test/game-room.test.ts`
+- [X] T021 [P] [US4] Add tests for allowed duration values (60, 90, 120, 0), A-Z defaults, non-empty allowed-letter validation, server letter draw, absent deadline for unlimited mode, and the 30-second review deadline per category in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T022 [US4] Persist `roundDurationSeconds` and `allowedLetters`, validate host-only updates in `CONFIGURING`, and draw from the resulting A-Z set in `backend/src/game-room.ts`
-- [ ] T023 [US4] Include selected duration and allowed letters in room creation/update commands and remove local-only reroll behavior from `frontend/src/App.tsx`
-- [ ] T024 [US4] Initialize Lobby controls from authoritative settings and send updates instead of keeping unsynced component-only values in `frontend/src/screens/LobbyScreen.tsx`
-- [ ] T025 [US4] Derive countdown display from the server deadline and support no-deadline rounds without starting a local timeout in `frontend/src/screens/GameScreen.tsx`
+- [X] T022 [US4] Persist `roundDurationSeconds` and `allowedLetters`, validate host-only updates in `CONFIGURING`, and draw from the resulting A-Z set in `backend/src/game-room.ts`
+- [X] T023 [US4] Include duration and allowed letters in room creation/update commands, and remove local-only letter rerolls from `frontend/src/App.tsx` and `frontend/src/screens/GameScreen.tsx`
+- [X] T024 [US4] Initialize Lobby controls from authoritative settings and send updates instead of keeping unsynced component-only values in `frontend/src/screens/LobbyScreen.tsx`
+- [X] T025 [US4] Derive countdown display from the server deadline and support no-deadline rounds without starting a local timeout in `frontend/src/screens/GameScreen.tsx`
 
 **Checkpoint**: Duration and allowed-letter policies cannot diverge between host, participants, and server.
 
@@ -124,13 +124,13 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 5
 
-- [ ] T026 [P] [US5] Add tests for `passesLetterCheck`, empty/wrong-letter scoring, player/round/category validation, deadline boundaries, and Stop-versus-submit ordering in `backend/src/test/scoring.test.ts` and `backend/src/test/game-room.test.ts`
+- [X] T026 [P] [US5] Add tests for `passesLetterCheck`, empty/wrong-letter scoring, player/round/category validation, deadline boundaries, and Stop-versus-submit ordering in `backend/src/test/scoring.test.ts` and `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 5
 
-- [ ] T027 [US5] Validate player status, active phase, exact round ID, allowed category IDs, and server deadline before storing normalized answers in `backend/src/game-room.ts`
-- [ ] T028 [US5] Set automatic validity with `passesLetterCheck`, reject edits after the single Stop/timeout cutoff, and make Stop/timeout transition idempotently to review in `backend/src/game-room.ts`
-- [ ] T029 [US5] Flush pending answer changes before Stop, disable further editing after server closure, and use server deadline rather than a fixed 60-second local timer in `frontend/src/screens/GameScreen.tsx`
+- [X] T027 [US5] Validate player status, active phase, exact round ID, allowed category IDs, and server deadline before storing normalized answers in `backend/src/game-room.ts`
+- [X] T028 [US5] Set automatic validity with `passesLetterCheck`, reject edits after the single Stop/timeout cutoff, and make Stop/timeout transition idempotently to review in `backend/src/game-room.ts`
+- [X] T029 [US5] Flush answer snapshots as they change and before Stop, disable further editing after local Stop, and use the server deadline instead of a client timeout in `frontend/src/screens/GameScreen.tsx`
 
 **Checkpoint**: Blank/wrong-letter answers score zero, late/foreign commands cannot mutate the round, and clients agree on the closure point.
 
@@ -144,14 +144,14 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 6
 
-- [ ] T030 [P] [US6] Add scoring tests for 10/5/0 base points, duplicate normalization, invalidation ratios below 10%, 10%, 50%, above 50%, and author exclusion in `backend/src/test/scoring.test.ts`
-- [ ] T031 [P] [US6] Add room-command tests for hyphenated player IDs, self-vote rejection, voter eligibility, wrong-category rejection, and repeated requestId behavior in `backend/src/test/game-room.test.ts`
+- [X] T030 [P] [US6] Add scoring tests for 10/5/0 base points, duplicate normalization, invalidation ratios below 10%, 10%, 50%, above 50%, and author exclusion in `backend/src/test/scoring.test.ts`
+- [X] T031 [P] [US6] Add room-command tests for hyphenated player IDs, self-vote rejection, voter eligibility, wrong-category rejection, and repeated requestId behavior in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 6
 
-- [ ] T032 [US6] Replace majority-only invalidation with eligible-voter ratio scoring: half score at 10%-50% inclusive and zero above 50%, excluding the author, in `backend/src/scoring.ts`
-- [ ] T033 [US6] Replace delimiter-parsed `answer:invalidate` with explicit `answer:vote` target fields and validate active category, author, eligibility, and request idempotency in `backend/src/game-room.ts`
-- [ ] T034 [US6] Render per-answer vote decisions, disable self-voting, and send explicit `valid`/`invalidate` decisions without client-side final scoring in `frontend/src/screens/ResultsScreen.tsx`
+- [X] T032 [US6] Replace majority-only invalidation with eligible-voter ratio scoring: half score at 10%-50% inclusive and zero above 50%, excluding the author, in `backend/src/scoring.ts`
+- [X] T033 [US6] Replace delimiter-parsed `answer:invalidate` with explicit `answer:vote` target fields and validate active category, author, eligibility, and request idempotency in `backend/src/game-room.ts`
+- [X] T034 [US6] Render per-answer vote decisions, disable self-voting, and send explicit `valid`/`invalidate` decisions without client-side final scoring in `frontend/src/screens/ResultsScreen.tsx`
 
 **Checkpoint**: Vote identity is unambiguous for UUIDs; server score boundaries match the constitution and unit tests.
 

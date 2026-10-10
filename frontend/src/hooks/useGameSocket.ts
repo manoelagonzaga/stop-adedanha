@@ -1,14 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientCommand, ServerEvent, RoomState, Answer, FinalResults } from '../types';
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'resuming' | 'connected' | 'error';
 
 interface UseGameSocketOptions {
   url: string | null; // null = don't connect yet
+  roomCode: string | null;
   onEvent: (event: ServerEvent) => void;
 }
 
-export function useGameSocket({ url, onEvent }: UseGameSocketOptions) {
+function resumeStorageKey(roomCode: string): string {
+  return `stop-adedanha:resume:${roomCode.toUpperCase()}`;
+}
+
+function readResumeToken(roomCode: string | null): string | null {
+  if (!roomCode) return null;
+  try {
+    return sessionStorage.getItem(resumeStorageKey(roomCode));
+  } catch (error) {
+    console.error('[WS] Could not read the room resume credential from session storage', error);
+    return null;
+  }
+}
+
+export function clearResumeToken(roomCode: string): void {
+  try {
+    sessionStorage.removeItem(resumeStorageKey(roomCode));
+  } catch (error) {
+    console.error('[WS] Could not clear the room resume credential from session storage', error);
+  }
+}
+
+export function useGameSocket({ url, roomCode, onEvent }: UseGameSocketOptions) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,7 +67,7 @@ export function useGameSocket({ url, onEvent }: UseGameSocketOptions) {
 
       ws.onopen = () => {
         if (!cancelled) {
-          setStatus('connected');
+          setStatus('connecting');
           ws.send(
             JSON.stringify({
               type: 'session:hello',
@@ -56,12 +79,42 @@ export function useGameSocket({ url, onEvent }: UseGameSocketOptions) {
       };
 
       ws.onmessage = (e) => {
+        let event: ServerEvent;
         try {
-          const event = JSON.parse(e.data) as ServerEvent;
-          onEventRef.current(event);
+          event = JSON.parse(e.data) as ServerEvent;
         } catch {
-          console.error('[WS] Failed to parse message', e.data);
+          console.error('[WS] Failed to parse server message');
+          return;
         }
+
+        if (event.type === 'session:ready' && event.negotiatedProtocolVersion === 1) {
+          const resumeToken = readResumeToken(roomCode);
+          if (resumeToken) {
+            setStatus('resuming');
+            ws.send(
+              JSON.stringify({
+                type: 'session:resume',
+                requestId: crypto.randomUUID(),
+                protocolVersion: 1,
+                resumeToken,
+              }),
+            );
+          } else {
+            setStatus('connected');
+          }
+        } else if (event.type === 'room:joined' || event.type === 'session:resumed') {
+          try {
+            if (!roomCode) throw new Error('Room code is unavailable for credential storage');
+            sessionStorage.setItem(resumeStorageKey(roomCode), event.resumeToken);
+          } catch (error) {
+            console.error('[WS] Could not persist the room resume credential', error);
+          }
+          setStatus('connected');
+        } else if (event.type === 'error' && event.code === 'SESSION_INVALID') {
+          if (roomCode) clearResumeToken(roomCode);
+          setStatus('error');
+        }
+        onEventRef.current(event);
       };
 
       ws.onerror = () => {
@@ -84,7 +137,7 @@ export function useGameSocket({ url, onEvent }: UseGameSocketOptions) {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
-  }, [url, disconnect]);
+  }, [url, roomCode, disconnect]);
 
   return { status, send };
 }
@@ -115,6 +168,14 @@ export function useGameState() {
         break;
       }
 
+      case 'session:resumed':
+        setState((s) => ({
+          ...s,
+          room: event.state,
+          myPlayerId: event.playerId,
+        }));
+        break;
+
       case 'room:state':
         setState((s) => ({ ...s, room: event.state }));
         break;
@@ -127,8 +188,10 @@ export function useGameState() {
             ? {
                 ...s.room,
                 phase: 'ROUND_ACTIVE',
+                currentRound: event.roundNumber ?? s.room.currentRound + 1,
                 currentLetter: event.letter,
                 categories: event.categories,
+                currentRoundId: event.id,
                 roundDeadline: event.deadline,
               }
             : s.room,

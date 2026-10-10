@@ -12,8 +12,8 @@ Fields:
 - `players`: room-scoped players and accumulated scores.
 - `categories`: validated category snapshot used by the game.
 - `totalRounds`: integer from 1 through 20; the current lobby exposes 3, 5, 8, and 10.
-- `roundDurationSeconds`: one of 60, 90, 120, or 0 (unlimited).
-- `allowedLetters`: non-empty set of letters eligible for server-side draws.
+- `roundDurationSeconds`: one of 60 (default), 90, 120, or 0 (unlimited).
+- `allowedLetters`: non-empty set of letters eligible for server-side draws; defaults to A-Z.
 - `currentRound`: zero before start; otherwise 1 through `totalRounds`.
 - `currentLetter`, `roundDeadline`: current active round fields; deadline is absent for unlimited time.
 - `currentReviewCategoryIndex`, `reviewDeadline`: present during sequential review.
@@ -50,6 +50,7 @@ Credential fields (private storage; never broadcast):
 Rules:
 
 - Credentials are scoped to one room and player and delivered only to the owner.
+- Resume credentials expire 30 days after issue and are rotated after every successful resume.
 - A reconnect restores the existing player; it does not add another seat or create a second score.
 - Credentials are not placed in URLs or logs.
 

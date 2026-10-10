@@ -3,6 +3,7 @@ export type {
   Player,
   RoomState,
   Answer,
+  VoteDecision,
   Category,
   PodiumItem,
   RankingListItem,
@@ -13,4 +14,3 @@ export type {
   CommandRequest,
   RoomSettings,
 } from '../../shared/types';
-

@@ -22,12 +22,16 @@ export interface Category {
   name: string;
 }
 
+export type VoteDecision = 'valid' | 'invalidate';
+
 export interface Answer {
   playerId: string;
   categoryId: string;
   value: string;
   isValid: boolean;
   invalidations: string[]; // array of playerIds who invalidated it
+  votes?: Record<string, VoteDecision>;
+  eligibleVoters?: string[];
   score: number;
 }
 
@@ -82,7 +86,13 @@ export interface RoomSettings {
 export type ClientCommand =
   | ({ type: 'session:hello'; protocolVersion: ProtocolVersion } & CommandRequest)
   | ({ type: 'session:resume'; resumeToken: string } & CommandRequest)
-  | ({ type: 'room:create'; nickname: string; totalRounds?: number } & CommandRequest)
+  | ({
+      type: 'room:create';
+      nickname: string;
+      totalRounds?: number;
+      roundDurationSeconds?: 0 | 60 | 90 | 120;
+      allowedLetters?: string[];
+    } & CommandRequest)
   | ({ type: 'room:join'; code: string; nickname: string } & CommandRequest)
   | ({ type: 'lobby:categories:update'; categories: string[] } & CommandRequest)
   | ({ type: 'lobby:rounds:update'; totalRounds: number } & CommandRequest)
@@ -99,9 +109,8 @@ export type ClientCommand =
       roundId: string;
       categoryId: string;
       answerPlayerId: string;
-      decision: 'valid' | 'invalidate';
+      decision: VoteDecision;
     } & CommandRequest)
-  | ({ type: 'answer:invalidate'; roundId: string; categoryId: string; answerId: string } & CommandRequest)
   | ({ type: 'round:next'; roundId: string } & CommandRequest);
 
 // Server to Client Events
@@ -160,4 +169,3 @@ export type ServerEvent =
   | { type: 'game:final_results'; podium: PodiumItem[]; list: RankingListItem[] }
   | { type: 'player:presence'; id: string; nickname: string; status: 'active' | 'disconnected' }
   | { type: 'error'; code: string; message: string; requestId?: string };
-

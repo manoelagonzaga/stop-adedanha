@@ -5,7 +5,7 @@ import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { PodiumScreen } from './screens/PodiumScreen';
-import { useGameSocket, useGameState } from './hooks/useGameSocket';
+import { clearResumeToken, useGameSocket, useGameState } from './hooks/useGameSocket';
 import type { RoomState, FinalResults } from './types';
 
 
@@ -19,6 +19,7 @@ function wsUrl(roomCode: string): string {
 }
 
 type UIScreen = 'início' | 'configuração' | 'jogo' | 'resultado' | 'pódio';
+const DEFAULT_ALLOWED_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 // ── Stub final results for when finalResults is null ─────────────────────────
 function buildFinalResults(room: RoomState): import('./types').FinalResults {
@@ -43,6 +44,8 @@ export default function App() {
   const [screen, setScreen] = useState<UIScreen>('início');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [entryError, setEntryError] = useState<string | null>(null);
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [isRoomPending, setIsRoomPending] = useState(false);
   const pendingCommandRef = useRef<(() => void) | null>(null);
   const pendingRoomRequestIdRef = useRef<string | null>(null);
@@ -58,6 +61,8 @@ export default function App() {
         pendingRoomRequestIdRef.current = null;
         setEntryError(null);
         setIsRoomPending(false);
+        setReconnectError(null);
+        setLobbyError(null);
         const phase = event.state.phase;
         if (phase === 'CONFIGURING' || phase === 'WAITING_PLAYERS') setScreen('configuração');
         else if (phase === 'ROUND_ACTIVE') setScreen('jogo');
@@ -67,6 +72,13 @@ export default function App() {
       if (event.type === 'round:started') setScreen('jogo');
       if (event.type === 'round:review:category') setScreen('resultado');
       if (event.type === 'game:final_results') setScreen('pódio');
+      if (event.type === 'session:resumed') setReconnectError(null);
+      if (event.type === 'error' && event.code === 'SESSION_INVALID') {
+        setReconnectError('Não foi possível restaurar sua sessão. Volte ao início e entre na sala novamente.');
+      }
+      if (event.type === 'error' && event.requestId !== pendingRoomRequestIdRef.current) {
+        setLobbyError(event.message);
+      }
 
       if (
         event.type === 'error' &&
@@ -95,6 +107,7 @@ export default function App() {
 
   const { status, send } = useGameSocket({
     url: roomCode ? wsUrl(roomCode) : null,
+    roomCode,
     onEvent,
   });
 
@@ -102,6 +115,7 @@ export default function App() {
 
   async function handleCreateRoom(nickname: string) {
     setEntryError(null);
+    setReconnectError(null);
     setIsRoomPending(true);
     try {
       const response = await fetch('/rooms', { method: 'POST' });
@@ -113,7 +127,13 @@ export default function App() {
       const requestId = crypto.randomUUID();
       pendingRoomRequestIdRef.current = requestId;
       pendingCommandRef.current = () =>
-        send({ type: 'room:create', requestId, nickname });
+        send({
+          type: 'room:create',
+          requestId,
+          nickname,
+          roundDurationSeconds: 60,
+          allowedLetters: DEFAULT_ALLOWED_LETTERS,
+        });
       setRoomCode(result.code);
     } catch (error) {
       setIsRoomPending(false);
@@ -125,8 +145,10 @@ export default function App() {
 
   function handleJoinRoom(nickname: string, code: string) {
     const canonicalCode = code.trim().toUpperCase();
+    clearResumeToken(canonicalCode);
     const requestId = crypto.randomUUID();
     setEntryError(null);
+    setReconnectError(null);
     setIsRoomPending(true);
     pendingRoomRequestIdRef.current = requestId;
     pendingCommandRef.current = () =>
@@ -135,25 +157,30 @@ export default function App() {
   }
 
   function handleUpdateCategories(categories: string[]) {
+    setLobbyError(null);
     send({ type: 'lobby:categories:update', requestId: crypto.randomUUID(), categories });
-    // Optimistic update
-    setState((s) => ({
-      ...s,
-      room: s.room
-        ? { ...s.room, categories: categories.map((name, i) => ({ id: `cat-${i}`, name })) }
-        : s.room,
-    }));
   }
 
   function handleUpdateRounds(totalRounds: number) {
-    // Optimistic update; no dedicated command yet — server will sync via room:state
-    setState((s) => ({
-      ...s,
-      room: s.room ? { ...s.room, totalRounds } : s.room,
-    }));
+    setLobbyError(null);
+    send({ type: 'lobby:rounds:update', requestId: crypto.randomUUID(), totalRounds });
+  }
+
+  function handleUpdateOptions(
+    roundDurationSeconds: 0 | 60 | 90 | 120,
+    allowedLetters: string[],
+  ) {
+    setLobbyError(null);
+    send({
+      type: 'lobby:options:update',
+      requestId: crypto.randomUUID(),
+      roundDurationSeconds,
+      allowedLetters,
+    });
   }
 
   function handleStartGame() {
+    setLobbyError(null);
     send({ type: 'game:start', requestId: crypto.randomUUID() });
   }
 
@@ -165,25 +192,25 @@ export default function App() {
     send({ type: 'round:stop', requestId: crypto.randomUUID(), roundId });
   }
 
-  function handleInvalidate(roundId: string, answerKey: string) {
-    // answerKey is "playerId-categoryId"
-    const [, categoryId] = answerKey.split('-');
+  function handleVote(
+    roundId: string,
+    categoryId: string,
+    answerPlayerId: string,
+    decision: 'valid' | 'invalidate',
+  ) {
     send({
-      type: 'answer:invalidate',
+      type: 'answer:vote',
       requestId: crypto.randomUUID(),
       roundId,
       categoryId,
-      answerId: answerKey,
+      answerPlayerId,
+      decision,
     });
-  }
-
-  function handleNextRound() {
-    // Server transitions automatically; this is a local fallback
-    setScreen('jogo');
   }
 
   function handlePlayAgain() {
     setRoomCode(null);
+    setReconnectError(null);
     setState({ room: null, answers: [], finalResults: null, myPlayerId: null });
     setScreen('início');
   }
@@ -203,7 +230,8 @@ export default function App() {
     currentRound: 1,
     totalRounds: 5,
     currentLetter: 'S',
-    roundDeadline: Date.now() + 60_000,
+    roundDurationSeconds: 60,
+    allowedLetters: DEFAULT_ALLOWED_LETTERS,
   };
 
   const myPlayerId = state.myPlayerId ?? 'local-player';
@@ -216,16 +244,42 @@ export default function App() {
       {/* Connection status badge (dev helper) */}
       {status !== 'connected' && status !== 'disconnected' && (
         <div
-          className={`fixed right-4 top-4 z-50 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${status === 'connecting'
+          className={`fixed right-4 top-4 z-50 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${status === 'connecting' || status === 'resuming'
             ? 'bg-amber-400 text-amber-900'
             : 'bg-rose-500 text-white'
             }`}
         >
           <span
-            className={`h-2 w-2 rounded-full ${status === 'connecting' ? 'animate-pulse bg-amber-700' : 'bg-white'
+            className={`h-2 w-2 rounded-full ${status === 'connecting' || status === 'resuming' ? 'animate-pulse bg-amber-700' : 'bg-white'
               }`}
           />
-          {status === 'connecting' ? 'Conectando...' : 'Conexão perdida'}
+          {status === 'connecting'
+            ? 'Conectando...'
+            : status === 'resuming'
+              ? 'Restaurando sessão...'
+              : 'Conexão perdida'}
+        </div>
+      )}
+
+      {reconnectError && (
+        <div
+          role="alert"
+          className="fixed inset-x-4 top-16 z-50 mx-auto flex max-w-2xl items-center justify-between gap-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 shadow-lg"
+        >
+          <span>{reconnectError}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (roomCode) clearResumeToken(roomCode);
+              setRoomCode(null);
+              setReconnectError(null);
+              setState({ room: null, answers: [], finalResults: null, myPlayerId: null });
+              setScreen('início');
+            }}
+            className="shrink-0 rounded-lg bg-amber-900 px-3 py-2 text-white"
+          >
+            Voltar ao início
+          </button>
         </div>
       )}
 
@@ -244,7 +298,9 @@ export default function App() {
           myPlayerId={myPlayerId}
           onUpdateCategories={handleUpdateCategories}
           onUpdateRounds={handleUpdateRounds}
+          onUpdateOptions={handleUpdateOptions}
           onStartGame={handleStartGame}
+          statusMessage={lobbyError}
         />
       )}
 
@@ -262,10 +318,7 @@ export default function App() {
           room={room}
           myPlayerId={myPlayerId}
           answers={state.answers}
-          ranking={room.players}
-          onNextRound={handleNextRound}
-          onFinishGame={() => setScreen('pódio')}
-          onInvalidate={handleInvalidate}
+          onVote={handleVote}
         />
       )}
 
