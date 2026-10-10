@@ -67,6 +67,9 @@ export interface RoomState {
   roundDeadline?: number;
   currentReviewCategoryIndex?: number;
   reviewDeadline?: number;
+  lastActivityAt?: number;
+  completedAt?: number;
+  expiresAt?: number;
   roundDurationSeconds?: 0 | 60 | 90 | 120;
   allowedLetters?: string[];
   currentRoundId?: string;

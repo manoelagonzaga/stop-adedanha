@@ -111,9 +111,162 @@ describe('useGameSocket resume protocol', () => {
     expect(result.current.status).toBe('error');
     unmount();
   });
+
+  it('tracks pending request IDs until the matching ack or error arrives', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const onEvent = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useGameSocket({ url: 'ws://example.test/rooms/ABC234', roomCode: 'ABC234', onEvent }),
+    );
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.onopen?.(new Event('open')));
+    act(() => socket.emit({
+      type: 'session:ready',
+      negotiatedProtocolVersion: 1,
+    }));
+
+    let sent = false;
+    act(() => {
+      sent = result.current.send({
+        type: 'lobby:rounds:update',
+        requestId: 'rounds-1',
+        totalRounds: 8,
+      });
+    });
+    expect(sent).toBe(true);
+    expect(result.current.pendingRequestIds).toEqual(['rounds-1']);
+
+    act(() => socket.emit({
+      type: 'command:ack',
+      requestId: 'rounds-1',
+      commandType: 'lobby:rounds:update',
+      status: 'committed',
+    }));
+    expect(result.current.pendingRequestIds).toEqual([]);
+
+    act(() => {
+      result.current.send({
+        type: 'lobby:rounds:update',
+        requestId: 'rounds-2',
+        totalRounds: 10,
+      });
+    });
+    act(() => socket.emit({
+      type: 'error',
+      requestId: 'rounds-2',
+      code: 'INVALID_CONFIGURATION',
+      message: 'Configuração inválida.',
+    }));
+    expect(result.current.pendingRequestIds).toEqual([]);
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'error',
+      requestId: 'rounds-2',
+      message: 'Configuração inválida.',
+    }));
+    unmount();
+  });
+
+  it('returns false and reports the request when a command cannot be sent', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const onEvent = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useGameSocket({ url: null, roomCode: null, onEvent }),
+    );
+    let sent = true;
+    act(() => {
+      sent = result.current.send({
+        type: 'game:start',
+        requestId: 'offline-start',
+      });
+    });
+    expect(sent).toBe(false);
+    expect(result.current.pendingRequestIds).toEqual([]);
+    expect(onEvent).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('emits a correlated failure when the WebSocket send throws', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const onEvent = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useGameSocket({ url: 'ws://example.test/rooms/ABC234', roomCode: 'ABC234', onEvent }),
+    );
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.onopen?.(new Event('open')));
+    act(() => socket.emit({ type: 'session:ready', negotiatedProtocolVersion: 1 }));
+    vi.spyOn(socket, 'send').mockImplementation(() => {
+      throw new Error('socket write failed');
+    });
+
+    let sent = true;
+    act(() => {
+      sent = result.current.send({ type: 'game:start', requestId: 'send-failed' });
+    });
+
+    expect(sent).toBe(false);
+    expect(result.current.pendingRequestIds).toEqual([]);
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'error',
+      requestId: 'send-failed',
+      code: 'SEND_FAILED',
+      message: 'Não foi possível enviar a ação. Verifique sua conexão e tente novamente.',
+    });
+    unmount();
+  });
+
+  it('rejects pending actions when the socket disconnects before an acknowledgement', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    vi.useFakeTimers();
+    const onEvent = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useGameSocket({ url: 'ws://example.test/rooms/ABC234', roomCode: 'ABC234', onEvent }),
+    );
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.onopen?.(new Event('open')));
+    act(() => socket.emit({ type: 'session:ready', negotiatedProtocolVersion: 1 }));
+    act(() => {
+      result.current.send({ type: 'round:stop', requestId: 'stop-pending', roundId: 'round-1' });
+    });
+
+    act(() => socket.close());
+
+    expect(result.current.pendingRequestIds).toEqual([]);
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'error',
+      requestId: 'stop-pending',
+      code: 'CONNECTION_LOST',
+      message: 'A conexão foi perdida antes da confirmação desta ação.',
+    });
+    unmount();
+    vi.useRealTimers();
+  });
 });
 
 describe('useGameState authoritative category review', () => {
+  it('records acknowledgements and correlated server errors in application state', () => {
+    const { result } = renderHook(() => useGameState());
+    act(() => {
+      result.current.handleEvent({
+        type: 'command:ack',
+        requestId: 'settings-1',
+        commandType: 'lobby:rounds:update',
+        status: 'committed',
+      });
+      result.current.handleEvent({
+        type: 'error',
+        requestId: 'settings-2',
+        code: 'INVALID_CONFIGURATION',
+        message: 'Configuração inválida.',
+      });
+    });
+    expect(result.current.state.lastCommandResult).toEqual({
+      requestId: 'settings-2',
+      status: 'rejected',
+      message: 'Configuração inválida.',
+      code: 'INVALID_CONFIGURATION',
+    });
+  });
+
   it('tracks the server category, deadline, answers, and cumulative scoreboard events', () => {
     const { result } = renderHook(() => useGameState());
     const room = {

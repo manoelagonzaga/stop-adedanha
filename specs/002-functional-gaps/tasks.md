@@ -246,13 +246,13 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 11
 
-- [ ] T052 [P] [US11] Add frontend tests for pending request correlation, server error display, disconnected send behavior, and absence of mock active-game data in `frontend/src/App.test.tsx` and `frontend/src/hooks/useGameSocket.test.ts`
+- [X] T052 [P] [US11] Add frontend tests for pending request correlation, server error display, disconnected send behavior, and absence of mock active-game data in `frontend/src/App.test.tsx` and `frontend/src/hooks/useGameSocket.test.ts`
 
 ### Implementation for User Story 11
 
-- [ ] T053 [US11] Track pending request IDs, return explicit send success/failure, and dispatch ack/error events into application state in `frontend/src/hooks/useGameSocket.ts`
-- [ ] T054 [US11] Remove optimistic settings and demo fallback values; render loading, confirmed room state, or recoverable error instead in `frontend/src/App.tsx`
-- [ ] T055 [US11] Replace unconditional “saved” feedback with pending/confirmed/rejected states and show safe server messages in `frontend/src/screens/LobbyScreen.tsx` and `frontend/src/screens/EntryScreen.tsx`
+- [X] T053 [US11] Track pending request IDs, return explicit send success/failure, and dispatch ack/error events into application state in `frontend/src/hooks/useGameSocket.ts`
+- [X] T054 [US11] Remove optimistic settings and demo fallback values; render loading, confirmed room state, or recoverable error instead in `frontend/src/App.tsx`
+- [X] T055 [US11] Replace unconditional “saved” feedback with pending/confirmed/rejected states and show safe server messages in `frontend/src/screens/LobbyScreen.tsx` and `frontend/src/screens/EntryScreen.tsx`
 
 **Checkpoint**: All significant actions have truthful feedback; no screen presents placeholder game data as live state.
 
@@ -266,14 +266,14 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 12
 
-- [ ] T056 [P] [US12] Add a two-browser-context E2E for room creation/join, settings, answers, Stop, sequential review, host-confirmed next round, and final podium in `frontend/e2e/multiplayer.spec.ts`
-- [ ] T057 [P] [US12] Add browser accessibility assertions for keyboard focus after Stop/category/result transitions and `prefers-reduced-motion` behavior in `frontend/e2e/accessibility.spec.ts`
+- [X] T056 [P] [US12] Add a two-browser-context E2E for room creation/join, settings, answers, Stop, sequential review, host-confirmed next round, and final podium in `frontend/e2e/multiplayer.spec.ts`
+- [X] T057 [P] [US12] Add browser accessibility assertions for keyboard focus after Stop/category/result transitions and `prefers-reduced-motion` behavior in `frontend/e2e/accessibility.spec.ts`
 
 ### Implementation for User Story 12
 
-- [ ] T058 [US12] Add any missing E2E fixtures/selectors and stable accessible status announcements for realtime phase changes in `frontend/src/App.tsx`, `frontend/src/screens/GameScreen.tsx`, `frontend/src/screens/ResultsScreen.tsx`, and `frontend/src/screens/PodiumScreen.tsx`
-- [ ] T059 [US12] Complete Worker integration scenarios for two clients, reconnect, alarm expiry, and Durable Object restoration in `backend/src/test/game-room.test.ts`
-- [ ] T060 [US12] Update the runnable test/build commands and expected outcomes to match the implemented scripts in `specs/002-functional-gaps/quickstart.md`
+- [X] T058 [US12] Add any missing E2E fixtures/selectors and stable accessible status announcements for realtime phase changes in `frontend/src/App.tsx`, `frontend/src/screens/GameScreen.tsx`, `frontend/src/screens/ResultsScreen.tsx`, and `frontend/src/screens/PodiumScreen.tsx`
+- [X] T059 [US12] Complete Worker integration scenarios for two clients, reconnect, alarm expiry, and Durable Object restoration in `backend/src/test/game-room.test.ts`
+- [X] T060 [US12] Update the runnable test/build commands and expected outcomes to match the implemented scripts in `specs/002-functional-gaps/quickstart.md`
 
 **Checkpoint**: The complete feature is reproducibly validated with real package scripts and two independent clients.
 
@@ -283,12 +283,12 @@ description: "Executable implementation task list for the functional gaps featur
 
 **Purpose**: Verify the integrated system against all design artifacts and quality gates.
 
-- [ ] T061 [P] Add room-expiration tests for idle unstarted rooms and completed games, ensuring active round alarms take precedence, in `backend/src/test/game-room.test.ts`
-- [ ] T062 Implement room idle/completion expiration and multiplex room-expiry alarms with round/review deadlines in `backend/src/game-room.ts`
-- [ ] T063 Document the room lifetime policy and expiration validation scenario in `specs/002-functional-gaps/data-model.md` and `specs/002-functional-gaps/quickstart.md`
-- [ ] T064 [P] Run backend tests, lint, typecheck, and build; resolve failures caused by the implementation in `backend/package.json` and `backend/src/`
-- [ ] T065 [P] Run frontend tests, lint, and production build; resolve failures caused by the implementation in `frontend/package.json` and `frontend/src/`
-- [ ] T066 Run the complete `specs/002-functional-gaps/quickstart.md` validation, confirm all 12 independent test criteria, and reconcile contracts/model/spec with final behavior in `specs/002-functional-gaps/`
+- [X] T061 [P] Add room-expiration tests for idle unstarted rooms and completed games, ensuring active round alarms take precedence, in `backend/src/test/game-room.test.ts`
+- [X] T062 Implement room idle/completion expiration and multiplex room-expiry alarms with round/review deadlines in `backend/src/game-room.ts`
+- [X] T063 Document the room lifetime policy and expiration validation scenario in `specs/002-functional-gaps/data-model.md` and `specs/002-functional-gaps/quickstart.md`
+- [X] T064 [P] Run backend tests, lint, typecheck, and build; resolve failures caused by the implementation in `backend/package.json` and `backend/src/`
+- [X] T065 [P] Run frontend tests, lint, and production build; resolve failures caused by the implementation in `frontend/package.json` and `frontend/src/`
+- [X] T066 Run the complete `specs/002-functional-gaps/quickstart.md` validation, confirm all 12 independent test criteria, and reconcile contracts/model/spec with final behavior in `specs/002-functional-gaps/`
 
 ---
 

@@ -5,3 +5,5 @@ coverage/
 *.log
 .env*
 .wrangler/
+frontend/test-results/
+frontend/playwright-report/

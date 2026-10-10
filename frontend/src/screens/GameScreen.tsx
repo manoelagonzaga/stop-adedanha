@@ -83,7 +83,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
   const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6" data-game-screen>
       {/* Barra Superior da Rodada */}
       <div className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm md:flex-row md:p-6">
         {/* Info da Rodada */}
@@ -98,7 +98,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
               </span>
               <span className="text-xs text-slate-400">Sala Privada #{room.code}</span>
             </div>
-            <h1 className="text-xl font-black text-slate-900 md:text-2xl">
+            <h1 tabIndex={-1} className="text-xl font-black text-slate-900 outline-none md:text-2xl">
               Rodada {room.currentRound} de {room.totalRounds}
             </h1>
           </div>

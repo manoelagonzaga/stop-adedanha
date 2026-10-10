@@ -17,7 +17,8 @@ Fields:
 - `currentRound`: zero before start; otherwise 1 through `totalRounds`.
 - `currentLetter`, `roundDeadline`: current active round fields; deadline is absent for unlimited time.
 - `currentReviewCategoryIndex`, `reviewDeadline`: present during sequential review.
-- `lastActivityAt`: timestamp updated by valid player activity.
+- `lastActivityAt`: timestamp updated by valid activity in an unstarted/configuring room.
+- `completedAt`: timestamp when the room enters `GAME_OVER`.
 - `expiresAt`: next room cleanup deadline.
 
 Rules:
@@ -29,8 +30,10 @@ Rules:
 - Only an active room member may mutate game state. Host-only actions additionally require the active host role and the command's allowed phase.
 - A game requires at least two active players and 1-20 unique, non-empty categories (maximum 40 Unicode code points per category name).
 - A room code routes to one Durable Object; uninitialized codes are not joinable rooms.
-- Unstarted/inactive rooms expire after 24 hours without valid activity; completed rooms expire one hour after `GAME_OVER`.
-- Round and review deadlines take precedence over idle expiry while a game is active.
+- Unstarted/configuring rooms expire after 24 hours without valid activity; completed rooms expire one hour after `GAME_OVER`.
+- A room in an active game, including `ROUND_RESULTS` while awaiting host confirmation, is not subject to idle expiration.
+- The Durable Object multiplexes its single alarm: active round and category-review deadlines take precedence; otherwise eligible unstarted/configuring or completed rooms use `expiresAt`.
+- Expiration removes persisted room, round, game-state, and resume-credential data, resets the Durable Object for a future allocation, and closes any remaining sockets.
 
 ## Player and Resume Credential
 

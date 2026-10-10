@@ -260,9 +260,29 @@ Os itens abaixo descrevem o trabalho que falta, em ordem de prioridade. Cada ite
 3. Há uma verificação reproduzível para acessibilidade essencial e movimento reduzido.
 4. Os comandos documentados para build, lint e teste funcionam a partir do ambiente indicado no quickstart.
 
+## Item 13 — Expirar salas inativas e partidas concluídas
+
+**Prioridade:** baixa — P2
+
+**Contexto observado:** o Durable Object mantém uma sala persistida indefinidamente depois que o lobby fica abandonado ou a partida termina. Isso deixa dados de jogo e credenciais de retomada sem uma política de limpeza, e o Durable Object possui um único alarme que também é usado pelos prazos de rodada e revisão.
+
+**Implementação necessária:**
+
+- Expirar salas ainda não iniciadas/configurando após 24 horas sem atividade válida e jogos concluídos uma hora após `GAME_OVER`.
+- Multiplexar o alarme do Durable Object para que os deadlines de rodada e revisão tenham precedência; não expirar jogos ativos, inclusive resultados aguardando a confirmação do anfitrião.
+- Ao expirar, apagar o estado persistido da sala, rodada, jogo e credenciais de retomada, encerrar sockets restantes e permitir nova alocação no mesmo Durable Object.
+- Preservar/migrar timestamps de expiração no restauro para não reiniciar a janela de retenção por eviction.
+
+**Critérios de aceite:**
+
+1. Uma sala não iniciada é removida após 24 horas sem atividade válida; atividade válida no lobby renova o prazo.
+2. Uma sala concluída permanece disponível por uma hora após `GAME_OVER` e é removida quando o prazo vence.
+3. Um prazo antigo de inatividade não antecipa alarme de rodada/revisão nem encerra uma partida ativa.
+4. Os testes verificam limpeza persistida e a política continua correta após restauração do Durable Object.
+
 ## Ordem recomendada de execução
 
-Implementar os itens na ordem apresentada. Os itens 1 e 2 desbloqueiam uma sessão multiplayer confiável; os itens 3 a 8 completam o ciclo da partida; o item 9 protege partidas em execução; os itens 10 e 11 endurecem a experiência real; e o item 12 transforma os critérios em regressões detectáveis.
+Implementar os itens na ordem apresentada. Os itens 1 e 2 desbloqueiam uma sessão multiplayer confiável; os itens 3 a 8 completam o ciclo da partida; o item 9 protege partidas em execução; os itens 10 e 11 endurecem a experiência real; e os itens 12 e 13 cobrem regressões, acessibilidade e ciclo de vida das salas.
 
 ## Fora do escopo deste levantamento
 

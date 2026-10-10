@@ -36,6 +36,7 @@ Run backend unit, contract, and Worker/Durable Object tests:
 ```powershell
 Set-Location backend
 npm run test
+npm run lint
 npm run typecheck
 npm run build
 ```
@@ -49,14 +50,21 @@ npm run lint
 npm run build
 ```
 
-Run the two-client browser scenarios:
+Install Chromium once before the first E2E run:
+
+```powershell
+Set-Location frontend
+npx playwright install chromium
+```
+
+Run the two-client browser scenarios (this command starts the local Worker and Vite development server on ports 8787 and 4173):
 
 ```powershell
 Set-Location frontend
 npm run test:e2e
 ```
 
-The test scripts/configuration are part of this feature's implementation; a missing script is a failure, not a successful no-op.
+The Playwright configuration starts both services and polls the Worker health endpoint. The browser suite uses separate contexts to complete a three-round match, checks host-controlled progression, exercises keyboard Stop/focus behavior, and verifies reduced-motion styling. A missing script or browser binary is a failure, not a successful no-op.
 
 ## End-to-end scenarios
 
@@ -70,9 +78,9 @@ The test scripts/configuration are part of this feature's implementation; a miss
 8. Reconnect a browser during answering and during review. Confirm the same player identity, score, answers, active category, and deadline are restored.
 9. Restart/evict the local Durable Object during an active round and review phase. Confirm persisted state restores and elapsed alarms advance once without losing answers or duplicating scores.
 10. Disconnect the host in the lobby. Confirm the next eligible active player is promoted and receives host-only controls.
-11. Verify an unstarted room expires after 24 hours of inactivity and a completed room remains viewable for one hour before cleanup; active round/review alarms must not be shortened by idle expiry.
-12. Attempt keyboard-only navigation and check focus after Stop, category changes, and final results. Enable reduced motion and confirm the game remains fully understandable without decorative animation.
+11. Run `npm test -- src/test/game-room.test.ts` from `backend` to verify idle expiry at 24 hours, completed-room expiry at one hour, and that an active-round deadline takes precedence over an old idle deadline. The Durable Object deletes persisted room/game/round/resume data when expiration fires.
+12. Run `npm run test:e2e` from `frontend` to verify keyboard-triggered Stop, focus transfer to the current phase heading, and removal of decorative background animation when reduced motion is requested.
 
 ## Expected outcome
 
-Both package builds and lint checks pass; test commands run real suites; two independent clients complete a full multi-round match with host-confirmed intermediate progression; invalid or stale commands return explicit errors; reconnection and Durable Object recovery preserve authoritative state.
+Both packages' tests, typechecks/builds, and lint checks run as real suites. The Playwright suite completes a multi-round match using two independent contexts and verifies accessibility essentials. Backend lifecycle tests cover room expiry and alarm precedence; reconnection and Durable Object recovery preserve authoritative state.

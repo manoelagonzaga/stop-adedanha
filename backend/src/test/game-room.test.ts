@@ -11,7 +11,10 @@ function makeDurableObjectState() {
       put: vi.fn(async (key: string, value: unknown) => {
         persisted.set(key, structuredClone(value));
       }),
-      setAlarm: vi.fn(async () => undefined),
+      delete: vi.fn(async (key: string) => persisted.delete(key)),
+      setAlarm: vi.fn(async (timestamp: number) => {
+        void timestamp;
+      }),
       deleteAlarm: vi.fn(async () => undefined),
     },
     blockConcurrencyWhile: vi.fn((callback: () => Promise<void>) => callback()),
@@ -101,6 +104,12 @@ async function allocate(room: GameRoom, code: string) {
 }
 
 describe('room allocation and identity', () => {
+  it('exposes a health endpoint for local Worker readiness checks', async () => {
+    const response = await worker.fetch(new Request('https://game.example/health'), {} as never);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: 'ok' });
+  });
+
   it('retries allocation collisions and returns the successfully reserved code', async () => {
     const allocatedCodes: string[] = [];
     let attempt = 0;
@@ -2148,6 +2157,117 @@ describe('room allocation and identity', () => {
     expect(await nextEvent(events, 'error')).toMatchObject({
       code: 'ROOM_NOT_FOUND',
       requestId: 'join-unknown',
+    });
+  });
+
+  describe('room expiration alarms', () => {
+    it('expires an idle unstarted room after 24 hours', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      try {
+        const { state, persisted } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        expect((await allocate(room, 'JDL246')).status).toBe(201);
+        const expiresAt = (persisted.get('room') as RoomState).expiresAt!;
+        expect(expiresAt - Date.now()).toBe(24 * 60 * 60 * 1000);
+        expect(state.storage.setAlarm).toHaveBeenLastCalledWith(expiresAt);
+
+        vi.setSystemTime(expiresAt);
+        await room.alarm();
+
+        expect(persisted.has('room')).toBe(false);
+        expect(persisted.has('gameState')).toBe(false);
+        expect(state.storage.deleteAlarm).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps a completed game available for one hour, then expires it', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      try {
+        const { state, persisted } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        expect((await allocate(room, 'DNE234')).status).toBe(201);
+        const internal = room as unknown as {
+          room: RoomState;
+          persistRoom: () => Promise<void>;
+        };
+        internal.room.phase = 'GAME_OVER';
+        await internal.persistRoom();
+        const expiresAt = internal.room.expiresAt!;
+        expect(expiresAt - internal.room.completedAt!).toBe(60 * 60 * 1000);
+        expect(state.storage.setAlarm).toHaveBeenLastCalledWith(expiresAt);
+        vi.setSystemTime(expiresAt - 1);
+        await room.alarm();
+        expect(persisted.has('room')).toBe(true);
+
+        vi.setSystemTime(expiresAt);
+        await room.alarm();
+
+        expect(persisted.has('room')).toBe(false);
+        expect(persisted.has('roundData')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('preserves an active round deadline instead of applying idle expiry', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      try {
+        const { state, persisted } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        expect((await allocate(room, 'PLY234')).status).toBe(201);
+        const internal = room as unknown as {
+          room: RoomState;
+          persistRoom: () => Promise<void>;
+        };
+        internal.room.phase = 'ROUND_ACTIVE';
+        internal.room.roundDeadline = Date.now() + 90_000;
+        internal.room.expiresAt = Date.now() - 1;
+        await internal.persistRoom();
+
+        await room.alarm();
+
+        expect(persisted.has('room')).toBe(true);
+        expect(state.storage.setAlarm).toHaveBeenLastCalledWith(internal.room.roundDeadline);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('persists expiration timestamps when restoring a legacy completed room', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      try {
+        const { state, persisted } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        await allocate(room, 'LEG234');
+        const legacyRoom = {
+          ...(persisted.get('room') as RoomState),
+          phase: 'GAME_OVER' as const,
+        };
+        delete legacyRoom.lastActivityAt;
+        delete legacyRoom.completedAt;
+        delete legacyRoom.expiresAt;
+        persisted.set('room', legacyRoom);
+        persisted.set('gameState', { room: legacyRoom, roundData: null });
+
+        const restored = new GameRoom(state);
+        await restored.alarm();
+        const savedRoom = (persisted.get('gameState') as { room: RoomState }).room;
+        const expiresAt = savedRoom.expiresAt;
+        expect(expiresAt).toBe(Date.now() + 60 * 60 * 1000);
+
+        vi.setSystemTime(Date.now() + 10 * 60 * 1000);
+        const restoredAgain = new GameRoom(state);
+        await restoredAgain.alarm();
+        expect((persisted.get('gameState') as { room: RoomState }).room.expiresAt).toBe(expiresAt);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
