@@ -6,18 +6,12 @@ import { GameScreen } from './screens/GameScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { PodiumScreen } from './screens/PodiumScreen';
 import { clearResumeToken, useGameSocket, useGameState } from './hooks/useGameSocket';
+import { getBackendBaseUrl, getRoomWebSocketUrl, getRoomsApiUrl } from './utils/backendUrl';
 import type { GameState } from './hooks/useGameSocket';
 import type { ClientCommand, RoomState } from './types';
 
 
-// ── WebSocket URL ─────────────────────────────────────────────────────────────
-// In dev mode the Vite proxy forwards /ws/* to the local wrangler backend.
-// In production replace with the actual Workers URL.
-function wsUrl(roomCode: string): string {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = import.meta.env.VITE_BACKEND_HOST || location.host;
-  return `${proto}://${host}/rooms/${roomCode}`;
-}
+const backendBaseUrl = getBackendBaseUrl(import.meta.env.VITE_BACKEND_URL, location.origin);
 
 type UIScreen = 'início' | 'configuração' | 'jogo' | 'resultado' | 'pódio';
 type LobbyActionStatus = {
@@ -137,7 +131,7 @@ export default function App() {
   );
 
   const { status, send } = useGameSocket({
-    url: roomCode ? wsUrl(roomCode) : null,
+    url: roomCode ? getRoomWebSocketUrl(backendBaseUrl, roomCode) : null,
     roomCode,
     onEvent,
   });
@@ -172,7 +166,7 @@ export default function App() {
     setReconnectError(null);
     setIsRoomPending(true);
     try {
-      const response = await fetch('/rooms', { method: 'POST' });
+      const response = await fetch(getRoomsApiUrl(backendBaseUrl), { method: 'POST' });
       const result = (await response.json()) as { code?: string; error?: string; message?: string };
       if (!response.ok || !result.code) {
         throw new Error(result.message ?? result.error ?? 'Não foi possível alocar uma sala.');
