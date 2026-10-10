@@ -95,6 +95,12 @@ interface ResumeCredential {
   expiresAt: number;
 }
 
+interface SocketAttachment {
+  playerId: string;
+  roomCode: string;
+  negotiated: boolean;
+}
+
 // ── GameRoom Durable Object ────────────────────────────────────────────────────
 
 export class GameRoom implements DurableObject {
@@ -114,6 +120,7 @@ export class GameRoom implements DurableObject {
   private requestIdOrder: string[] = [];
   private inFlightRequests = new Set<string>();
   private failedRequests = new Set<string>();
+  private commandQueue: Promise<void> = Promise.resolve();
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -174,6 +181,7 @@ export class GameRoom implements DurableObject {
         await this.state.storage.put('room', this.room);
       }
       await this.reconcilePersistedDeadline();
+      this.restoreSocketSessions();
     });
   }
 
@@ -219,6 +227,11 @@ export class GameRoom implements DurableObject {
     this.state.acceptWebSocket(server, [playerId]);
     this.sessions.set(server, playerId);
     this.sessionRoomCodes.set(server, roomCode);
+    this.writeSocketAttachment(server, {
+      playerId,
+      roomCode,
+      negotiated: false,
+    });
 
     this.sendTo(server, {
       type: 'session:ready',
@@ -229,9 +242,10 @@ export class GameRoom implements DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+  async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const receivedAt = Date.now();
+    await this.initialization;
     const playerId = this.sessions.get(socket);
-    if (!playerId) return;
 
     if (typeof message !== 'string') {
       this.sendError(socket, 'INVALID_MESSAGE', 'Only text messages are supported');
@@ -272,6 +286,20 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    if (!playerId) {
+      console.warn('[GameRoom] WebSocket message received without an active session', {
+        commandType: commandPayload.type,
+        requestId,
+      });
+      this.sendTo(socket, {
+        type: 'error',
+        code: 'SESSION_INVALID',
+        message: 'A sessão WebSocket não está mais ativa. Reconecte-se à sala.',
+        requestId,
+      });
+      return;
+    }
+
     if (commandPayload.type === 'session:hello') {
       if (this.negotiatedSockets.has(socket)) {
         this.sendError(socket, 'INVALID_PHASE', 'Protocol negotiation already completed', requestId);
@@ -287,6 +315,11 @@ export class GameRoom implements DurableObject {
       }
 
       this.negotiatedSockets.add(socket);
+      this.writeSocketAttachment(socket, {
+        playerId,
+        roomCode: this.sessionRoomCodes.get(socket) ?? this.room.code,
+        negotiated: true,
+      });
       this.sendTo(socket, {
         type: 'session:ready',
         playerId,
@@ -315,21 +348,49 @@ export class GameRoom implements DurableObject {
     const cmd = payload as ClientCommand;
     const requestKey = this.requestKey(playerId, requestId);
     this.inFlightRequests.add(requestKey);
-    this.handleCommand(socket, playerId, cmd).then(() => {
-      this.inFlightRequests.delete(requestKey);
-      if (this.failedRequests.delete(requestKey)) return;
-      this.sendTo(socket, {
-        type: 'command:ack',
-        requestId,
+    const isLobbyCommand =
+      cmd.type === 'lobby:categories:update' ||
+      cmd.type === 'lobby:rounds:update' ||
+      cmd.type === 'lobby:options:update';
+    if (isLobbyCommand) {
+      console.log('[GameRoom] Lobby command received', {
         commandType: cmd.type,
-        status: 'committed',
+        requestId,
+        phase: this.room.phase,
+        isHost: this.isHost(playerId),
       });
-    }).catch((err) => {
-      console.error('[GameRoom] handleCommand error:', err);
-      this.sendError(socket, 'INTERNAL_ERROR', 'An unexpected server error occurred', requestId);
-      this.inFlightRequests.delete(requestKey);
-      this.failedRequests.delete(requestKey);
-    });
+    }
+    const processCommand = async () => {
+      try {
+        await this.handleCommand(socket, playerId, cmd, receivedAt);
+        this.inFlightRequests.delete(requestKey);
+        if (this.failedRequests.delete(requestKey)) return;
+        this.sendTo(socket, {
+          type: 'command:ack',
+          requestId,
+          commandType: cmd.type,
+          status: 'committed',
+        });
+        if (isLobbyCommand) {
+          console.log('[GameRoom] Lobby command committed', {
+            commandType: cmd.type,
+            requestId,
+          });
+        }
+      } catch (error) {
+        console.error('[GameRoom] Command processing failed:', {
+          commandType: cmd.type,
+          requestId,
+          error,
+        });
+        this.sendError(socket, 'INTERNAL_ERROR', 'An unexpected server error occurred', requestId);
+        this.inFlightRequests.delete(requestKey);
+        this.failedRequests.delete(requestKey);
+      }
+    };
+
+    this.commandQueue = this.commandQueue.then(processCommand, processCommand);
+    await this.commandQueue;
   }
 
   webSocketClose(socket: WebSocket): void {
@@ -353,7 +414,8 @@ export class GameRoom implements DurableObject {
   private async handleCommand(
     socket: WebSocket,
     playerId: string,
-    cmd: ClientCommand
+    cmd: ClientCommand,
+    receivedAt: number,
   ): Promise<void> {
     if (!this.validateMutationAuthority(socket, playerId, cmd)) return;
 
@@ -373,9 +435,9 @@ export class GameRoom implements DurableObject {
       case 'game:start':
         return this.handleGameStart(socket, playerId, cmd);
       case 'answer:submit':
-        return this.handleAnswerSubmit(socket, playerId, cmd);
+        return this.handleAnswerSubmit(socket, playerId, cmd, receivedAt);
       case 'round:stop':
-        return this.handleRoundStop(socket, playerId, cmd);
+        return this.handleRoundStop(socket, playerId, cmd, receivedAt);
       case 'answer:vote':
         return this.handleAnswerVote(socket, playerId, cmd);
       case 'round:next':
@@ -562,6 +624,11 @@ export class GameRoom implements DurableObject {
     }
 
     this.sessions.set(socket, player.id);
+    this.writeSocketAttachment(socket, {
+      playerId: player.id,
+      roomCode: this.sessionRoomCodes.get(socket) ?? this.room.code,
+      negotiated: true,
+    });
     player.status = 'active';
     this.ensureActiveHost();
     const rotatedToken = await this.rotateResumeCredential(credentials, credential, now);
@@ -630,6 +697,49 @@ export class GameRoom implements DurableObject {
   private createResumeToken(): string {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  private restoreSocketSessions(): void {
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = this.readSocketAttachment(socket);
+      const taggedPlayerId = this.state.getTags(socket)[0];
+      const playerId = attachment?.playerId ?? taggedPlayerId;
+      if (!playerId) continue;
+
+      this.sessions.set(socket, playerId);
+      this.sessionRoomCodes.set(socket, attachment?.roomCode ?? this.room.code);
+      if (
+        attachment?.negotiated ??
+        this.room.players.some((player) => player.id === playerId)
+      ) {
+        this.negotiatedSockets.add(socket);
+      }
+    }
+  }
+
+  private readSocketAttachment(socket: WebSocket): SocketAttachment | null {
+    const attachment: unknown = socket.deserializeAttachment();
+    if (
+      !attachment ||
+      typeof attachment !== 'object' ||
+      !('playerId' in attachment) ||
+      typeof attachment.playerId !== 'string' ||
+      !('roomCode' in attachment) ||
+      typeof attachment.roomCode !== 'string' ||
+      !('negotiated' in attachment) ||
+      typeof attachment.negotiated !== 'boolean'
+    ) {
+      return null;
+    }
+    return {
+      playerId: attachment.playerId,
+      roomCode: attachment.roomCode,
+      negotiated: attachment.negotiated,
+    };
+  }
+
+  private writeSocketAttachment(socket: WebSocket, attachment: SocketAttachment): void {
+    socket.serializeAttachment(attachment);
   }
 
   private async hashResumeToken(token: string): Promise<string> {
@@ -852,7 +962,8 @@ export class GameRoom implements DurableObject {
   private async handleAnswerSubmit(
     socket: WebSocket,
     playerId: string,
-    cmd: { type: 'answer:submit'; requestId: string; roundId: string; answers: Record<string, string> }
+    cmd: { type: 'answer:submit'; requestId: string; roundId: string; answers: Record<string, string> },
+    receivedAt: number,
   ): Promise<void> {
     const roundData = this.currentRoundData;
     const player = this.room.players.find((entry) => entry.id === playerId);
@@ -869,7 +980,7 @@ export class GameRoom implements DurableObject {
       this.sendError(socket, 'ROUND_CLOSED', 'Esta rodada não está mais aceitando respostas', cmd.requestId);
       return;
     }
-    if (this.room.roundDeadline !== undefined && Date.now() >= this.room.roundDeadline) {
+    if (this.room.roundDeadline !== undefined && receivedAt >= this.room.roundDeadline) {
       await this.beginCategoryReview(roundData);
       this.sendError(socket, 'ROUND_CLOSED', 'O prazo da rodada expirou', cmd.requestId);
       return;
@@ -910,7 +1021,8 @@ export class GameRoom implements DurableObject {
   private async handleRoundStop(
     socket: WebSocket,
     playerId: string,
-    cmd: { type: 'round:stop'; requestId: string; roundId: string }
+    cmd: { type: 'round:stop'; requestId: string; roundId: string },
+    receivedAt: number,
   ): Promise<void> {
     const roundData = this.currentRoundData;
     const player = this.room.players.find((entry) => entry.id === playerId);
@@ -927,14 +1039,14 @@ export class GameRoom implements DurableObject {
       this.sendError(socket, 'ROUND_CLOSED', 'Esta rodada já está fechada', cmd.requestId);
       return;
     }
-    if (this.room.roundDeadline !== undefined && Date.now() >= this.room.roundDeadline) {
+    if (this.room.roundDeadline !== undefined && receivedAt >= this.room.roundDeadline) {
       await this.beginCategoryReview(roundData);
       this.sendError(socket, 'ROUND_CLOSED', 'O prazo da rodada expirou', cmd.requestId);
       return;
     }
 
     roundData.stopperId = playerId;
-    roundData.stopTime = Date.now();
+    roundData.stopTime = receivedAt;
     await this.beginCategoryReview(roundData);
   }
 
@@ -1524,7 +1636,13 @@ export class GameRoom implements DurableObject {
     const playerId = this.sessions.get(socket);
     if (trackFailure && playerId && requestId) {
       const key = this.requestKey(playerId, requestId);
-      if (this.inFlightRequests.has(key)) this.failedRequests.add(key);
+      if (this.inFlightRequests.has(key)) {
+        this.failedRequests.add(key);
+        console.warn('[GameRoom] Command rejected', {
+          code,
+          requestId,
+        });
+      }
     }
     this.sendTo(socket, { type: 'error', code, message, requestId });
   }
