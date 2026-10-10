@@ -192,6 +192,15 @@ export default function App() {
     send({ type: 'round:stop', requestId: crypto.randomUUID(), roundId });
   }
 
+  function handleNextRound() {
+    if (!room?.currentRoundId) return;
+    send({
+      type: 'round:next',
+      requestId: crypto.randomUUID(),
+      roundId: room.currentRoundId,
+    });
+  }
+
   function handleVote(
     roundId: string,
     categoryId: string,
@@ -319,6 +328,7 @@ export default function App() {
           myPlayerId={myPlayerId}
           answers={state.answers}
           onVote={handleVote}
+          onNextRound={handleNextRound}
         />
       )}
 

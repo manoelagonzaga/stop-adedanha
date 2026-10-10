@@ -14,6 +14,7 @@ export interface Player {
   isHost: boolean;
   status: 'active' | 'disconnected';
   score: number;
+  joinedAt?: number;
   avatar?: string;
 }
 

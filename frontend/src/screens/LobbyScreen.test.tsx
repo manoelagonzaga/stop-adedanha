@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/Toast';
 import type { RoomState } from '../types';
 import { LobbyScreen } from './LobbyScreen';
+
+afterEach(cleanup);
 
 describe('LobbyScreen authoritative options', () => {
   it('sends duration and allowed-letter changes without applying them before a room snapshot', () => {
@@ -49,5 +51,38 @@ describe('LobbyScreen authoritative options', () => {
     fireEvent.click(screen.getByRole('button', { name: 'A' }));
     expect(onUpdateOptions).toHaveBeenLastCalledWith(90, alphabet.filter((letter) => letter !== 'A'));
     expect(screen.getByRole('button', { name: 'A' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('suspends host controls and reports when no active host is present', () => {
+    const room: RoomState = {
+      code: 'ABC234',
+      phase: 'CONFIGURING',
+      players: [
+        { id: 'host-1', nickname: 'Host', isHost: false, status: 'disconnected', score: 0 },
+        { id: 'guest-2', nickname: 'Guest', isHost: false, status: 'active', score: 0 },
+      ],
+      categories: [{ id: 'cat-0', name: 'Nome' }],
+      currentRound: 0,
+      totalRounds: 5,
+    };
+
+    render(
+      <ToastProvider>
+        <LobbyScreen
+          room={room}
+          myPlayerId="guest-2"
+          onUpdateCategories={vi.fn()}
+          onUpdateRounds={vi.fn()}
+          onUpdateOptions={vi.fn()}
+          onStartGame={vi.fn()}
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByText(
+      'Ações de anfitrião suspensas até um participante existente retomar a sessão.',
+    )).toHaveAttribute('role', 'status');
+    expect(screen.getByRole('button', { name: '90s' })).toBeDisabled();
+    expect(screen.getByText('Aguardando um anfitrião ativo…')).toBeInTheDocument();
   });
 });

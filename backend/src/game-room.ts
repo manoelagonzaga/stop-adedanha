@@ -3,14 +3,14 @@ import type {
   Category,
   Answer,
   RoomState,
+  GamePhase,
   ClientCommand,
   ServerEvent,
 } from './types';
 import {
   passesLetterCheck,
-  computeRoundScores,
+  computeCategoryScores,
   buildFinalRanking,
-  type RoundSnapshot,
 } from './scoring';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -37,6 +37,24 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-4', name: 'Objeto' },
 ];
 
+const MUTATION_PHASES: Partial<Record<ClientCommand['type'], GamePhase>> = {
+  'lobby:categories:update': 'CONFIGURING',
+  'lobby:rounds:update': 'CONFIGURING',
+  'lobby:options:update': 'CONFIGURING',
+  'game:start': 'CONFIGURING',
+  'answer:submit': 'ROUND_ACTIVE',
+  'round:stop': 'ROUND_ACTIVE',
+  'answer:vote': 'CATEGORY_REVIEW',
+  'round:next': 'ROUND_RESULTS',
+};
+const HOST_ONLY_COMMANDS = new Set<ClientCommand['type']>([
+  'lobby:categories:update',
+  'lobby:rounds:update',
+  'lobby:options:update',
+  'game:start',
+  'round:next',
+]);
+
 // ── Per-round data ─────────────────────────────────────────────────────────────
 
 interface RoundData {
@@ -47,6 +65,25 @@ interface RoundData {
   stopTime: number | null;
   submittedPlayers: Set<string>;
   eligibleVoterIds: string[];
+  scoredCategoryIndexes: Set<number>;
+  roundBonusApplied: boolean;
+}
+
+interface PersistedRoundData {
+  id: string;
+  letter: string;
+  answers: [string, Answer][];
+  stopperId: string | null;
+  stopTime: number | null;
+  submittedPlayers: string[];
+  eligibleVoterIds: string[];
+  scoredCategoryIndexes: number[];
+  roundBonusApplied: boolean;
+}
+
+interface PersistedGameState {
+  room: RoomState;
+  roundData: PersistedRoundData | null;
 }
 
 interface ResumeCredential {
@@ -60,6 +97,7 @@ interface ResumeCredential {
 
 export class GameRoom implements DurableObject {
   private readonly state: DurableObjectState;
+  private readonly initialization: Promise<void>;
 
   // In-memory state (reconstructed from Durable Storage on cold start)
   private room: RoomState;
@@ -90,21 +128,37 @@ export class GameRoom implements DurableObject {
     };
 
     // Restore persisted state (hibernation support)
-    this.state.blockConcurrencyWhile(async () => {
-      const persisted = await this.state.storage.get<RoomState>('room');
-      if (persisted) {
+    this.initialization = this.state.blockConcurrencyWhile(async () => {
+      const saved = await this.state.storage.get<PersistedGameState>('gameState');
+      const persistedRoom = saved?.room ?? await this.state.storage.get<RoomState>('room');
+      if (persistedRoom) {
+        const legacyJoinBase = Date.now() - persistedRoom.players.length;
         this.room = {
-          ...persisted,
-          roundDurationSeconds: persisted.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
-          allowedLetters: persisted.allowedLetters ?? [...DEFAULT_ALLOWED_LETTERS],
+          ...persistedRoom,
+          players: persistedRoom.players.map((player, index) => ({
+            ...player,
+            joinedAt: player.joinedAt ?? legacyJoinBase + index,
+          })),
+          roundDurationSeconds: persistedRoom.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
+          allowedLetters: persistedRoom.allowedLetters ?? [...DEFAULT_ALLOWED_LETTERS],
         };
       }
+
+      const persistedRound =
+        saved?.roundData ?? await this.state.storage.get<PersistedRoundData>('roundData');
+      if (persistedRound) {
+        const roundData = this.restoreRoundData(persistedRound);
+        this.rounds.set(roundData.id, roundData);
+        this.currentRoundData = roundData;
+      }
+      await this.reconcilePersistedDeadline();
     });
   }
 
   // ── WebSocket lifecycle ─────────────────────────────────────────────────────
 
   async fetch(request: Request): Promise<Response> {
+    await this.initialization;
     const url = new URL(request.url);
 
     if (request.method === 'POST' && url.pathname === '/__allocate') {
@@ -262,7 +316,9 @@ export class GameRoom implements DurableObject {
       this.sessions.delete(socket);
       this.sessionRoomCodes.delete(socket);
       this.negotiatedSockets.delete(socket);
-      this.setPlayerStatus(playerId, 'disconnected');
+      void this.setPlayerStatus(playerId, 'disconnected').catch((error) => {
+        console.error('[GameRoom] Failed to persist player departure:', error);
+      });
     }
   }
 
@@ -277,6 +333,8 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: ClientCommand
   ): Promise<void> {
+    if (!this.validateMutationAuthority(socket, playerId, cmd)) return;
+
     switch (cmd.type) {
       case 'session:resume':
         return this.handleSessionResume(socket, playerId, cmd);
@@ -298,6 +356,8 @@ export class GameRoom implements DurableObject {
         return this.handleRoundStop(socket, playerId, cmd);
       case 'answer:vote':
         return this.handleAnswerVote(socket, playerId, cmd);
+      case 'round:next':
+        return this.handleRoundNext(socket, playerId, cmd);
       default:
         this.sendError(socket, 'UNKNOWN_COMMAND', 'Unknown command type', cmd.requestId);
     }
@@ -346,6 +406,7 @@ export class GameRoom implements DurableObject {
       isHost: true,
       status: 'active',
       score: 0,
+      joinedAt: this.nextJoinedAt(),
     };
 
     this.room = {
@@ -416,12 +477,12 @@ export class GameRoom implements DurableObject {
       this.room.players.push({
         id: playerId,
         nickname,
-        isHost: this.room.players.length === 0,
+        isHost: false,
         status: 'active',
         score: 0,
+        joinedAt: this.nextJoinedAt(),
       });
     }
-
     await this.persistRoom();
 
     // Send full room state to the joining player
@@ -480,6 +541,7 @@ export class GameRoom implements DurableObject {
 
     this.sessions.set(socket, player.id);
     player.status = 'active';
+    this.ensureActiveHost();
     const rotatedToken = await this.rotateResumeCredential(credentials, credential, now);
     await this.persistRoom();
 
@@ -579,6 +641,9 @@ export class GameRoom implements DurableObject {
         answers: Array.from(round.answers.values()),
         ranking: [...this.room.players].sort((a, b) => b.score - a.score),
       });
+    } else if (this.room.phase === 'GAME_OVER') {
+      const { podium, list } = buildFinalRanking(this.room.players);
+      this.sendTo(socket, { type: 'game:final_results', podium, list });
     }
   }
 
@@ -733,11 +798,14 @@ export class GameRoom implements DurableObject {
       stopTime: null,
       submittedPlayers: new Set(),
       eligibleVoterIds: [],
+      scoredCategoryIndexes: new Set(),
+      roundBonusApplied: false,
     };
     this.rounds.set(roundId, roundData);
     this.currentRoundData = roundData;
 
     await this.persistRoom();
+    await this.persistRoundData(roundData);
 
     this.broadcast({
       type: 'round:started',
@@ -812,6 +880,7 @@ export class GameRoom implements DurableObject {
     }
 
     roundData.submittedPlayers.add(playerId);
+    await this.persistRoundData(roundData);
   }
 
   // ── Round: Stop ────────────────────────────────────────────────────────────
@@ -864,6 +933,7 @@ export class GameRoom implements DurableObject {
       answer.votes ??= {};
     }
     await this.persistRoom();
+    await this.persistRoundData(roundData);
     await this.broadcastCategoryReview(roundData, 0);
   }
 
@@ -876,9 +946,13 @@ export class GameRoom implements DurableObject {
     }
 
     this.broadcast(event);
+    await this.persistRoom();
 
     // Auto-advance category after deadline
-    if (event.deadline) this.state.storage.setAlarm(event.deadline);
+    if (event.deadline) await this.state.storage.setAlarm(event.deadline);
+    if (this.isCategoryReviewComplete(roundData, categoryIndex)) {
+      await this.completeCategoryReview(roundData, categoryIndex);
+    }
   }
 
   private buildCategoryReviewEvent(
@@ -946,6 +1020,10 @@ export class GameRoom implements DurableObject {
       return;
     }
     if (this.room.reviewDeadline !== undefined && Date.now() >= this.room.reviewDeadline) {
+      await this.completeCategoryReview(
+        roundData,
+        this.room.currentReviewCategoryIndex ?? 0,
+      );
       this.sendError(socket, 'ROUND_CLOSED', 'The active category deadline has passed', cmd.requestId);
       return;
     }
@@ -986,34 +1064,118 @@ export class GameRoom implements DurableObject {
       .filter(([voterId, decision]) => eligibleVoters.includes(voterId) && decision === 'invalidate')
       .map(([voterId]) => voterId);
 
+    await this.persistRoundData(roundData);
     const event = this.buildCategoryReviewEvent(
       roundData,
       this.room.currentReviewCategoryIndex ?? 0,
     );
     if (event) this.broadcast(event);
+    if (this.isCategoryReviewComplete(roundData, this.room.currentReviewCategoryIndex ?? 0)) {
+      await this.completeCategoryReview(roundData, this.room.currentReviewCategoryIndex ?? 0);
+    }
+  }
+
+  private async handleRoundNext(
+    socket: WebSocket,
+    playerId: string,
+    cmd: Extract<ClientCommand, { type: 'round:next' }>,
+  ): Promise<void> {
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Only active room players may advance the round', cmd.requestId);
+      return;
+    }
+    if (!this.isHost(playerId)) {
+      this.sendError(socket, 'NOT_HOST', 'Only the host can advance to the next round', cmd.requestId);
+      return;
+    }
+    if (
+      this.room.phase !== 'ROUND_RESULTS' ||
+      cmd.roundId !== this.room.currentRoundId ||
+      this.room.currentRound >= this.room.totalRounds
+    ) {
+      this.sendError(socket, 'ROUND_CLOSED', 'This round cannot be advanced', cmd.requestId);
+      return;
+    }
+
+    await this.startNextRound();
+  }
+
+  private isCategoryReviewComplete(roundData: RoundData, categoryIndex: number): boolean {
+    const category = this.room.categories[categoryIndex];
+    if (!category) return false;
+    const reviewableAnswers = [...roundData.answers.values()].filter(
+      (answer) =>
+        answer.categoryId === category.id &&
+        answer.isValid &&
+        answer.value.trim().length > 0,
+    );
+
+    return reviewableAnswers.length > 0 && reviewableAnswers.every((answer) =>
+      (answer.eligibleVoters ?? []).every((voterId) =>
+        Object.prototype.hasOwnProperty.call(answer.votes ?? {}, voterId),
+      ),
+    );
+  }
+
+  private async completeCategoryReview(roundData: RoundData, categoryIndex: number): Promise<void> {
+    if (
+      this.room.phase !== 'CATEGORY_REVIEW' ||
+      this.currentRoundData !== roundData ||
+      this.room.currentReviewCategoryIndex !== categoryIndex ||
+      roundData.scoredCategoryIndexes.has(categoryIndex)
+    ) {
+      return;
+    }
+
+    const category = this.room.categories[categoryIndex];
+    if (!category) return;
+
+    roundData.scoredCategoryIndexes.add(categoryIndex);
+    const { scores } = computeCategoryScores(roundData, category, this.room.players);
+    const categoryScores = Object.fromEntries(
+      this.room.players.map((player) => [player.id, scores[player.id] ?? 0]),
+    );
+    for (const player of this.room.players) {
+      const points = categoryScores[player.id] ?? 0;
+      player.score += points;
+      const answer = roundData.answers.get(`${player.id}:${category.id}`);
+      if (answer) answer.score = points;
+    }
+
+    await this.persistRoundData(roundData);
+    await this.persistRoom();
+    this.broadcast({
+      type: 'round:review:score_update',
+      categoryIndex,
+      categoryScores,
+      scoreboard: [...this.room.players],
+    });
+
+    const nextCategoryIndex = categoryIndex + 1;
+    if (nextCategoryIndex < this.room.categories.length) {
+      this.room.reviewDeadline = undefined;
+      this.room.currentReviewCategoryIndex = nextCategoryIndex;
+      await this.persistRoom();
+      await this.broadcastCategoryReview(roundData, nextCategoryIndex);
+      return;
+    }
+
+    await this.computeRoundScoresAndAdvance(roundData);
   }
 
   private async computeRoundScoresAndAdvance(roundData: RoundData): Promise<void> {
-    // Initialise scores
-    for (const player of this.room.players) {
-      player.score = player.score ?? 0;
-    }
-
-    const snapshot: RoundSnapshot = {
-      letter: roundData.letter,
-      answers: roundData.answers,
-      stopperId: roundData.stopperId,
-    };
-
-    const { roundPts } = computeRoundScores(snapshot, this.room.categories, this.room.players);
-
-    for (const [pid, pts] of Object.entries(roundPts)) {
-      const player = this.room.players.find((p) => p.id === pid);
-      if (player) player.score += pts;
+    if (!roundData.roundBonusApplied && roundData.stopperId) {
+      const stopper = this.room.players.find((player) => player.id === roundData.stopperId);
+      if (stopper) stopper.score += 10;
+      roundData.roundBonusApplied = true;
     }
 
     this.room.phase = 'ROUND_RESULTS';
+    this.room.reviewDeadline = undefined;
     await this.persistRoom();
+    await this.persistRoundData(roundData);
+    await this.state.storage.deleteAlarm();
 
     const allAnswers = Array.from(roundData.answers.values());
     const ranking = [...this.room.players].sort((a, b) => b.score - a.score);
@@ -1038,6 +1200,7 @@ export class GameRoom implements DurableObject {
   // ── Alarm (timeout handling) ───────────────────────────────────────────────
 
   async alarm(): Promise<void> {
+    await this.initialization;
     const now = Date.now();
 
     if (this.room.phase === 'ROUND_ACTIVE' && this.room.roundDeadline !== undefined) {
@@ -1051,23 +1214,57 @@ export class GameRoom implements DurableObject {
     }
 
     if (this.room.phase === 'CATEGORY_REVIEW' && this.room.reviewDeadline) {
-      if (now >= this.room.reviewDeadline - 1000) {
-        // Category review timer expired — advance to next category
-        const nextIdx = (this.room.currentReviewCategoryIndex ?? 0) + 1;
-        if (nextIdx < this.room.categories.length) {
-          this.room.currentReviewCategoryIndex = nextIdx;
-          this.room.reviewDeadline = undefined;
-          if (this.currentRoundData) {
-            await this.broadcastCategoryReview(this.currentRoundData, nextIdx);
-          }
-        } else {
-          // All categories reviewed
-          if (this.currentRoundData) {
-            await this.computeRoundScoresAndAdvance(this.currentRoundData);
-          }
-        }
+      if (now >= this.room.reviewDeadline && this.currentRoundData) {
+        await this.completeCategoryReview(
+          this.currentRoundData,
+          this.room.currentReviewCategoryIndex ?? 0,
+        );
       }
     }
+  }
+
+  private restoreRoundData(saved: PersistedRoundData): RoundData {
+    return {
+      id: saved.id,
+      letter: saved.letter,
+      answers: new Map(saved.answers),
+      stopperId: saved.stopperId,
+      stopTime: saved.stopTime,
+      submittedPlayers: new Set(saved.submittedPlayers),
+      eligibleVoterIds: [...saved.eligibleVoterIds],
+      scoredCategoryIndexes: new Set(saved.scoredCategoryIndexes),
+      roundBonusApplied: saved.roundBonusApplied,
+    };
+  }
+
+  private async reconcilePersistedDeadline(): Promise<void> {
+    const now = Date.now();
+    if (
+      this.room.phase === 'ROUND_ACTIVE' &&
+      this.room.roundDeadline !== undefined &&
+      this.currentRoundData
+    ) {
+      if (now >= this.room.roundDeadline) {
+        await this.beginCategoryReview(this.currentRoundData);
+      } else {
+        await this.state.storage.setAlarm(this.room.roundDeadline);
+      }
+      return;
+    }
+
+    if (this.room.phase === 'CATEGORY_REVIEW' && this.currentRoundData) {
+      if (this.room.reviewDeadline !== undefined && now >= this.room.reviewDeadline) {
+        await this.completeCategoryReview(
+          this.currentRoundData,
+          this.room.currentReviewCategoryIndex ?? 0,
+        );
+      } else if (this.room.reviewDeadline !== undefined) {
+        await this.state.storage.setAlarm(this.room.reviewDeadline);
+      }
+      return;
+    }
+
+    await this.state.storage.deleteAlarm();
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
@@ -1128,21 +1325,85 @@ export class GameRoom implements DurableObject {
   }
 
   private isHost(playerId: string): boolean {
-    return this.room.players.some((p) => p.id === playerId && p.isHost);
+    return this.room.players.some((p) => p.id === playerId && p.isHost && p.status === 'active');
   }
 
-  private setPlayerStatus(playerId: string, status: 'active' | 'disconnected'): void {
+  private validateMutationAuthority(
+    socket: WebSocket,
+    playerId: string,
+    cmd: ClientCommand,
+  ): boolean {
+    const phase = MUTATION_PHASES[cmd.type];
+    if (!phase) return true;
+
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'An active room membership is required for this action', cmd.requestId);
+      return false;
+    }
+
+    if (HOST_ONLY_COMMANDS.has(cmd.type) && !player.isHost) {
+      this.sendError(socket, 'NOT_HOST', 'Only the active host can perform this action', cmd.requestId);
+      return false;
+    }
+
+    if (this.room.phase !== phase) {
+      const code = cmd.type === 'answer:submit' ||
+        cmd.type === 'round:stop' ||
+        cmd.type === 'answer:vote' ||
+        cmd.type === 'round:next'
+        ? 'ROUND_CLOSED'
+        : 'INVALID_PHASE';
+      this.sendError(socket, code, 'This action is not allowed during the current game phase', cmd.requestId);
+      return false;
+    }
+    return true;
+  }
+
+  private async setPlayerStatus(playerId: string, status: 'active' | 'disconnected'): Promise<void> {
     const player = this.room.players.find((p) => p.id === playerId);
     if (player) {
       player.status = status;
+      if (status === 'disconnected' && player.isHost) {
+        this.room.players.forEach((entry) => {
+          entry.isHost = false;
+        });
+        this.ensureActiveHost();
+      } else if (status === 'active') {
+        this.ensureActiveHost();
+      }
       this.broadcast({
         type: 'player:presence',
         id: playerId,
         nickname: player.nickname,
         status,
       });
-      this.persistRoom();
+      await this.persistRoom();
+      this.broadcastRoomState();
     }
+  }
+
+  private ensureActiveHost(): void {
+    if (this.room.players.some((player) => player.isHost && player.status === 'active')) return;
+    this.room.players.forEach((player) => {
+      player.isHost = false;
+    });
+    const nextHost = this.room.players
+      .map((player, index) => ({ player, index }))
+      .filter(({ player }) => player.status === 'active')
+      .sort((left, right) =>
+        (left.player.joinedAt ?? left.index) - (right.player.joinedAt ?? right.index) ||
+        left.index - right.index,
+      )[0]?.player;
+    if (nextHost) nextHost.isHost = true;
+  }
+
+  private nextJoinedAt(): number {
+    const latestJoin = this.room.players.reduce(
+      (latest, player) => Math.max(latest, player.joinedAt ?? 0),
+      0,
+    );
+    return Math.max(Date.now(), latestJoin + 1);
   }
 
   private requestKey(playerId: string, requestId: string): string {
@@ -1201,7 +1462,36 @@ export class GameRoom implements DurableObject {
   }
 
   private async persistRoom(): Promise<void> {
+    await this.persistGameState();
     await this.state.storage.put('room', this.room);
+  }
+
+  private async persistRoundData(roundData: RoundData): Promise<void> {
+    await this.persistGameState();
+    await this.state.storage.put('roundData', this.serializeRoundData(roundData));
+  }
+
+  private serializeRoundData(roundData: RoundData): PersistedRoundData {
+    return {
+      id: roundData.id,
+      letter: roundData.letter,
+      answers: [...roundData.answers.entries()],
+      stopperId: roundData.stopperId,
+      stopTime: roundData.stopTime,
+      submittedPlayers: [...roundData.submittedPlayers],
+      eligibleVoterIds: [...roundData.eligibleVoterIds],
+      scoredCategoryIndexes: [...roundData.scoredCategoryIndexes],
+      roundBonusApplied: roundData.roundBonusApplied,
+    };
+  }
+
+  private async persistGameState(): Promise<void> {
+    await this.state.storage.put('gameState', {
+      room: this.room,
+      roundData: this.currentRoundData
+        ? this.serializeRoundData(this.currentRoundData)
+        : null,
+    } satisfies PersistedGameState);
   }
 
   private pickLetter(): string {

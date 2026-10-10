@@ -6,13 +6,16 @@ interface ResultsScreenProps {
   myPlayerId: string;
   answers: Answer[];
   onVote: (roundId: string, categoryId: string, answerPlayerId: string, decision: VoteDecision) => void;
+  onNextRound: () => void;
 }
 
-export function ResultsScreen({ room, myPlayerId, answers, onVote }: ResultsScreenProps) {
+export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }: ResultsScreenProps) {
   const categoryIndex = room.currentReviewCategoryIndex ?? 0;
   const category = room.categories[categoryIndex];
   const roundId = room.currentRoundId;
   const me = room.players.find((player) => player.id === myPlayerId);
+  const isActiveHost = me?.isHost === true && me.status === 'active';
+  const hasActiveHost = room.players.some((player) => player.isHost && player.status === 'active');
 
   const categoryAnswers = useMemo(
     () => (category ? answers.filter((answer) => answer.categoryId === category.id) : []),
@@ -64,7 +67,14 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote }: ResultsScre
             const invalidVotes = Object.values(votes).filter((decision) => decision === 'invalidate').length;
             const validVotes = Object.values(votes).filter((decision) => decision === 'valid').length;
             const eligibleVoters = answer.eligibleVoters?.length ?? 0;
-            const canVote = Boolean(value && answer.isValid && !isAuthor);
+            const canVote = Boolean(
+              room.phase === 'CATEGORY_REVIEW' &&
+              me?.status === 'active' &&
+              value &&
+              answer.isValid &&
+              !isAuthor &&
+              (!room.reviewDeadline || Date.now() < room.reviewDeadline),
+            );
 
             return (
               <article
@@ -142,11 +152,37 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote }: ResultsScre
             ))}
           </ol>
           <p className="mt-4 text-xs text-slate-500">
-            A pontuação desta rodada será atualizada após a revisão.
+            {room.phase === 'ROUND_RESULTS'
+              ? 'Pontuação da rodada confirmada pelo servidor.'
+              : 'A pontuação desta rodada será atualizada após a revisão.'}
           </p>
-          {me?.isHost && (
+          {room.phase === 'ROUND_RESULTS' && room.currentRound < room.totalRounds && isActiveHost && (
+            <button
+              type="button"
+              onClick={onNextRound}
+              className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"
+            >
+              Próxima Rodada
+            </button>
+          )}
+          {room.phase === 'ROUND_RESULTS' && room.currentRound < room.totalRounds && isActiveHost === false && hasActiveHost && (
+            <p className="mt-4 text-xs font-semibold text-indigo-700">
+              Aguardando o anfitrião iniciar a próxima rodada.
+            </p>
+          )}
+          {room.phase === 'ROUND_RESULTS' && room.currentRound < room.totalRounds && !hasActiveHost && (
+            <p role="status" className="mt-4 text-xs font-semibold text-amber-700">
+              Próxima rodada suspensa: não há anfitrião ativo na sala.
+            </p>
+          )}
+          {room.phase === 'CATEGORY_REVIEW' && isActiveHost && (
             <p className="mt-2 text-xs font-semibold text-indigo-700">
               A revisão avança automaticamente ao fim do tempo.
+            </p>
+          )}
+          {room.phase === 'CATEGORY_REVIEW' && !hasActiveHost && (
+            <p role="status" className="mt-2 text-xs font-semibold text-amber-700">
+              Não há anfitrião ativo. Os votos continuam disponíveis aos jogadores ativos.
             </p>
           )}
         </aside>
