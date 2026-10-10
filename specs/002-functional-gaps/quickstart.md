@@ -27,7 +27,7 @@ Set-Location frontend
 npm run start
 ```
 
-Open the Vite URL printed in the terminal. The development proxy forwards `/rooms` and WebSocket upgrades to the Worker.
+Open the Vite URL printed in the terminal. The frontend reads `VITE_BACKEND_URL` from the mode-specific `.env` file and sends HTTP and WebSocket requests directly to that backend origin; the default development value is `http://127.0.0.1:8787`.
 
 ## Automated checks
 
