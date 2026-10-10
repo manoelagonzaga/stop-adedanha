@@ -1,22 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import worker, { GameRoom } from '../index';
-import type { ServerEvent } from '../types';
+import type { RoomState, ServerEvent } from '../types';
 
 function makeDurableObjectState() {
   const serverSockets: WebSocket[] = [];
   const persisted = new Map<string, unknown>();
   const state = {
     storage: {
-      get: vi.fn(async (key: string) => persisted.get(key)),
+      get: vi.fn(async (key: string) => structuredClone(persisted.get(key))),
       put: vi.fn(async (key: string, value: unknown) => {
-        persisted.set(key, value);
+        persisted.set(key, structuredClone(value));
       }),
       setAlarm: vi.fn(async () => undefined),
       deleteAlarm: vi.fn(async () => undefined),
     },
-    blockConcurrencyWhile: vi.fn((callback: () => Promise<void>) => {
-      void callback();
-    }),
+    blockConcurrencyWhile: vi.fn((callback: () => Promise<void>) => callback()),
     acceptWebSocket: vi.fn((socket: WebSocket) => {
       serverSockets.push(socket);
       socket.accept();
@@ -584,7 +582,7 @@ describe('room allocation and identity', () => {
   });
 
   describe('authoritative answer submission and round cutoff', () => {
-    async function startRound() {
+    async function startRound(categories?: string[], totalRounds?: number) {
       const room = new GameRoom(makeDurableObjectState().state);
       await allocate(room, 'ABC234');
       const hostEvents: ServerEvent[] = [];
@@ -613,6 +611,33 @@ describe('room allocation and identity', () => {
       await nextEvent(guestEvents, 'room:state');
       await nextEvent(guestEvents, 'command:ack');
       await nextEvent(hostEvents, 'room:state');
+
+      if (categories) {
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:categories:update',
+            requestId: 'configure-answer-categories',
+            categories,
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(guestEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+      }
+      if (totalRounds !== undefined) {
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:rounds:update',
+            requestId: 'configure-answer-round-count',
+            totalRounds,
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(guestEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+      }
 
       room.webSocketMessage(host, JSON.stringify({ type: 'game:start', requestId: 'start-answer-round' }));
       const started = await nextEvent(hostEvents, 'round:started');
@@ -713,7 +738,7 @@ describe('room allocation and identity', () => {
         }),
       );
       expect(await nextEvent(guestEvents, 'error')).toMatchObject({
-        code: 'INVALID_ANSWER',
+        code: 'NOT_ELIGIBLE',
         requestId: 'submit-inactive-player',
       });
       expect(getRound(room).currentRoundData?.answers.size).toBe(answersBefore);
@@ -963,9 +988,653 @@ describe('room allocation and identity', () => {
         requestId: 'vote-ineligible',
       });
     });
+
+    it('commits each category once after all votes and broadcasts score/category events in order', async () => {
+      const { room, host, guest, started, hostEvents, guestEvents } = await startRound([
+        'Animal',
+        'Cidade',
+      ]);
+      const roomState = (room as unknown as {
+        room: { players: Array<{ id: string; isHost: boolean }>; categories: Array<{ id: string }> };
+      }).room;
+      const hostId = roomState.players.find((player) => player.isHost)!.id;
+      const guestId = roomState.players.find((player) => !player.isHost)!.id;
+      const [animal, city] = roomState.categories;
+      const hostAnimal = `${started.letter}A`;
+      const guestAnimal = `${started.letter}B`;
+      const hostCity = `${started.letter}C`;
+      const guestCity = `${started.letter}D`;
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'answer:submit',
+          requestId: 'submit-all-host-categories',
+          roundId: started.id,
+          answers: { [animal.id]: hostAnimal, [city.id]: hostCity },
+        }),
+      );
+      await nextEvent(hostEvents, 'command:ack');
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({
+          type: 'answer:submit',
+          requestId: 'submit-all-guest-categories',
+          roundId: started.id,
+          answers: { [animal.id]: guestAnimal, [city.id]: guestCity },
+        }),
+      );
+      await nextEvent(guestEvents, 'command:ack');
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:stop', requestId: 'stop-review-all-votes', roundId: started.id }),
+      );
+      expect(await nextEvent(hostEvents, 'round:review:category')).toMatchObject({ categoryIndex: 0 });
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'answer:vote',
+          requestId: 'vote-guest-animal-valid',
+          roundId: started.id,
+          categoryId: animal.id,
+          answerPlayerId: guestId,
+          decision: 'valid',
+        }),
+      );
+      await nextEvent(hostEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({
+          type: 'answer:vote',
+          requestId: 'vote-host-animal-valid',
+          roundId: started.id,
+          categoryId: animal.id,
+          answerPlayerId: hostId,
+          decision: 'valid',
+        }),
+      );
+      const completedCategory = await nextEvent(hostEvents, 'round:review:category');
+      const categoryZeroScore = await nextEvent(hostEvents, 'round:review:score_update');
+      const categoryOne = await nextEvent(hostEvents, 'round:review:category');
+      expect(completedCategory.categoryIndex).toBe(0);
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'round:review:score_update');
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'command:ack');
+
+      expect(categoryZeroScore).toMatchObject({
+        categoryIndex: 0,
+        categoryScores: { [hostId]: 10, [guestId]: 10 },
+        scoreboard: [
+          expect.objectContaining({ id: hostId, score: 10 }),
+          expect.objectContaining({ id: guestId, score: 10 }),
+        ],
+      });
+      expect(categoryOne).toMatchObject({ categoryIndex: 1, category: city });
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'answer:vote',
+          requestId: 'vote-guest-city-valid',
+          roundId: started.id,
+          categoryId: city.id,
+          answerPlayerId: guestId,
+          decision: 'valid',
+        }),
+      );
+      await nextEvent(hostEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({
+          type: 'answer:vote',
+          requestId: 'vote-host-city-valid',
+          roundId: started.id,
+          categoryId: city.id,
+          answerPlayerId: hostId,
+          decision: 'valid',
+        }),
+      );
+      const secondCategoryScore = await nextEvent(hostEvents, 'round:review:score_update');
+      const results = await nextEvent(hostEvents, 'round:results');
+      await nextEvent(guestEvents, 'round:review:score_update');
+      await nextEvent(guestEvents, 'round:results');
+      await nextEvent(guestEvents, 'command:ack');
+
+      expect(secondCategoryScore).toMatchObject({
+        categoryIndex: 1,
+        categoryScores: { [hostId]: 10, [guestId]: 10 },
+        scoreboard: expect.arrayContaining([
+          expect.objectContaining({ id: hostId, score: 20 }),
+          expect.objectContaining({ id: guestId, score: 20 }),
+        ]),
+      });
+      expect(results.ranking).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: hostId, score: 30 }),
+        expect.objectContaining({ id: guestId, score: 20 }),
+      ]));
+
+      await room.alarm();
+      expect(hostEvents.filter((event) => event.type === 'round:review:score_update')).toHaveLength(0);
+      expect(getRound(room).room.phase).toBe('ROUND_RESULTS');
+    });
+
+    it('commits full points for missing votes when the category deadline expires', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-10T12:00:00.000Z'));
+        const { room, host, started, hostEvents } = await startRound(['Animal']);
+        const hostId = (room as unknown as {
+          room: { players: Array<{ id: string; isHost: boolean }>; categories: Array<{ id: string }> };
+        }).room.players.find((player) => player.isHost)!.id;
+        const categoryId = (room as unknown as {
+          room: { categories: Array<{ id: string }> };
+        }).room.categories[0].id;
+
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId: 'submit-for-review-timeout',
+            roundId: started.id,
+            answers: { [categoryId]: `${started.letter}na` },
+          }),
+        );
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'round:stop', requestId: 'stop-for-review-timeout', roundId: started.id }),
+        );
+        const review = await nextEvent(hostEvents, 'round:review:category');
+        await nextEvent(hostEvents, 'command:ack');
+        expect(review.deadline).toBeGreaterThan(Date.now());
+
+        vi.setSystemTime(review.deadline! + 1);
+        await room.alarm();
+        const scoreUpdate = await nextEvent(hostEvents, 'round:review:score_update');
+        const results = await nextEvent(hostEvents, 'round:results');
+
+        expect(scoreUpdate).toMatchObject({
+          categoryIndex: 0,
+          categoryScores: { [hostId]: 10 },
+          scoreboard: expect.arrayContaining([expect.objectContaining({ id: hostId, score: 10 })]),
+        });
+        expect(results.ranking).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: hostId, score: 20 }),
+        ]));
+        expect(getRound(room).room.phase).toBe('ROUND_RESULTS');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('allows only the host to advance results and rejects stale or repeated next-round requests', async () => {
+      const { room, host, guest, started, hostEvents, guestEvents } = await startRound(['Animal']);
+      const roomState = (room as unknown as {
+        room: { players: Array<{ id: string; isHost: boolean }>; categories: Array<{ id: string }> };
+      }).room;
+      const hostId = roomState.players.find((player) => player.isHost)!.id;
+      const guestId = roomState.players.find((player) => !player.isHost)!.id;
+      const categoryId = roomState.categories[0].id;
+
+      for (const [socket, events, requestId, value] of [
+        [host, hostEvents, 'submit-next-host-answer', `${started.letter}A`],
+        [guest, guestEvents, 'submit-next-guest-answer', `${started.letter}B`],
+      ] as const) {
+        room.webSocketMessage(
+          socket,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId,
+            roundId: started.id,
+            answers: { [categoryId]: value },
+          }),
+        );
+        await nextEvent(events, 'command:ack');
+      }
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:stop', requestId: 'stop-before-next', roundId: started.id }),
+      );
+      await nextEvent(hostEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+      for (const [socket, events, requestId, answerPlayerId] of [
+        [host, hostEvents, 'vote-guest-before-next', guestId],
+        [guest, guestEvents, 'vote-host-before-next', hostId],
+      ] as const) {
+        room.webSocketMessage(
+          socket,
+          JSON.stringify({
+            type: 'answer:vote',
+            requestId,
+            roundId: started.id,
+            categoryId,
+            answerPlayerId,
+            decision: 'valid',
+          }),
+        );
+        await nextEvent(events, 'command:ack');
+      }
+      await nextEvent(hostEvents, 'round:review:category');
+      const results = await nextEvent(hostEvents, 'round:results');
+      await nextEvent(guestEvents, 'round:results');
+      expect(results.ranking).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: hostId, score: 20 }),
+        expect.objectContaining({ id: guestId, score: 10 }),
+      ]));
+      expect((room as unknown as { room: { phase: string } }).room.phase).toBe('ROUND_RESULTS');
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({ type: 'round:next', requestId: 'guest-next-round', roundId: started.id }),
+      );
+      expect(await nextEvent(guestEvents, 'error')).toMatchObject({
+        code: 'NOT_HOST',
+        requestId: 'guest-next-round',
+      });
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:next', requestId: 'host-next-round', roundId: 'stale-round' }),
+      );
+      expect(await nextEvent(hostEvents, 'error')).toMatchObject({
+        code: 'ROUND_CLOSED',
+        requestId: 'host-next-round',
+      });
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:next', requestId: 'advance-round-1', roundId: started.id }),
+      );
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:next', requestId: 'concurrent-next-round', roundId: started.id }),
+      );
+      const nextHostRound = await nextEvent(hostEvents, 'round:started');
+      const nextGuestRound = await nextEvent(guestEvents, 'round:started');
+      expect(await nextEvent(hostEvents, 'error')).toMatchObject({
+        code: 'ROUND_CLOSED',
+        requestId: 'concurrent-next-round',
+      });
+      expect(nextHostRound).toMatchObject({ id: 'round-2', roundNumber: 2 });
+      expect(nextGuestRound).toEqual(nextHostRound);
+      expect((room as unknown as { room: { currentRound: number; phase: string } }).room)
+        .toMatchObject({ currentRound: 2, phase: 'ROUND_ACTIVE' });
+      await nextEvent(hostEvents, 'command:ack');
+    });
+
+    it('finishes the final round without waiting for a next-round command', async () => {
+      const { room, host, guest, started, hostEvents, guestEvents } = await startRound(['Animal'], 1);
+      const roomState = (room as unknown as {
+        room: { players: Array<{ id: string; isHost: boolean }>; categories: Array<{ id: string }> };
+      }).room;
+      const hostId = roomState.players.find((player) => player.isHost)!.id;
+      const guestId = roomState.players.find((player) => !player.isHost)!.id;
+      const categoryId = roomState.categories[0].id;
+
+      for (const [socket, events, requestId, value] of [
+        [host, hostEvents, 'submit-final-host', `${started.letter}A`],
+        [guest, guestEvents, 'submit-final-guest', `${started.letter}B`],
+      ] as const) {
+        room.webSocketMessage(
+          socket,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId,
+            roundId: started.id,
+            answers: { [categoryId]: value },
+          }),
+        );
+        await nextEvent(events, 'command:ack');
+      }
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:stop', requestId: 'stop-final-round', roundId: started.id }),
+      );
+      await nextEvent(hostEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+      for (const [socket, events, requestId, answerPlayerId] of [
+        [host, hostEvents, 'vote-final-guest', guestId],
+        [guest, guestEvents, 'vote-final-host', hostId],
+      ] as const) {
+        room.webSocketMessage(
+          socket,
+          JSON.stringify({
+            type: 'answer:vote',
+            requestId,
+            roundId: started.id,
+            categoryId,
+            answerPlayerId,
+            decision: 'valid',
+          }),
+        );
+        await nextEvent(events, 'command:ack');
+      }
+
+      await nextEvent(hostEvents, 'round:review:category');
+      const results = await nextEvent(hostEvents, 'round:results');
+      const guestResults = await nextEvent(guestEvents, 'round:results');
+      const finalHost = await nextEvent(hostEvents, 'game:final_results');
+      const finalGuest = await nextEvent(guestEvents, 'game:final_results');
+      expect(results.ranking).toEqual(guestResults.ranking);
+      expect(finalGuest).toEqual(finalHost);
+      expect(finalHost.list).toEqual([]);
+      expect(finalHost.podium).toEqual(expect.arrayContaining([
+        expect.objectContaining({ playerId: hostId, score: 20 }),
+        expect.objectContaining({ playerId: guestId, score: 10 }),
+      ]));
+      expect((room as unknown as { room: { phase: string } }).room.phase).toBe('GAME_OVER');
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:next', requestId: 'next-after-final', roundId: started.id }),
+      );
+      expect(await nextEvent(hostEvents, 'error')).toMatchObject({
+        code: 'ROUND_CLOSED',
+        requestId: 'next-after-final',
+      });
+    });
   });
 
   describe('resume sessions', () => {
+    it('restores active round answers, letter, deadline, and current round from the same storage', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-10T12:00:00.000Z'));
+        const { state } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        await allocate(room, 'ABC234');
+        const hostEvents: ServerEvent[] = [];
+        const host = await connect(room, 'ABC234', hostEvents);
+        await negotiate(room, host, hostEvents, 'hello-recovery-active');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'room:create', requestId: 'create-recovery-active', nickname: 'Host' }),
+        );
+        await nextEvent(hostEvents, 'room:joined');
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        await joinActivePlayer(room, 'ABC234', 'Guest');
+        await nextEvent(hostEvents, 'room:state');
+
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:categories:update',
+            requestId: 'recovery-active-category',
+            categories: ['Animal'],
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:options:update',
+            requestId: 'recovery-active-options',
+            roundDurationSeconds: 60,
+            allowedLetters: ['A'],
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(host, JSON.stringify({ type: 'game:start', requestId: 'start-recovery-active' }));
+        const started = await nextEvent(hostEvents, 'round:started');
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId: 'submit-recovery-active',
+            roundId: started.id,
+            answers: { 'cat-0': 'Anta' },
+          }),
+        );
+        await nextEvent(hostEvents, 'command:ack');
+
+        const hostId = (room as unknown as {
+          room: { players: Array<{ id: string; isHost: boolean }> };
+        }).room.players.find((player) => player.isHost)!.id;
+        const restoredRoom = new GameRoom(state);
+        const restoredState = (restoredRoom as unknown as {
+          room: { phase: string; currentRound: number; currentLetter?: string; roundDeadline?: number };
+          currentRoundData: {
+            letter: string;
+            answers: Map<string, { value: string; isValid: boolean }>;
+          } | null;
+        });
+        await vi.waitFor(() => {
+          expect(restoredState.room.phase).toBe('ROUND_ACTIVE');
+          expect(restoredState.currentRoundData?.answers.get(`${hostId}:cat-0`))
+            .toMatchObject({ value: 'ANTA', isValid: true });
+        });
+        expect(restoredState.room).toMatchObject({
+          currentRound: 1,
+          currentLetter: 'A',
+          roundDeadline: started.deadline,
+        });
+        expect(restoredState.currentRoundData?.letter).toBe('A');
+        expect(state.storage.setAlarm).toHaveBeenLastCalledWith(started.deadline);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('restores review votes and stopper, then reconciles an expired alarm exactly once', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-10T12:00:00.000Z'));
+        const { state } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        await allocate(room, 'ABC234');
+        const hostEvents: ServerEvent[] = [];
+        const host = await connect(room, 'ABC234', hostEvents);
+        await negotiate(room, host, hostEvents, 'hello-recovery-review-host');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'room:create', requestId: 'create-recovery-review', nickname: 'Host' }),
+        );
+        const joined = await nextEvent(hostEvents, 'room:joined');
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        async function joinRecoveryPlayer(nickname: string, suffix: string) {
+          const events: ServerEvent[] = [];
+          const socket = await connect(room, 'ABC234', events);
+          await negotiate(room, socket, events, `hello-${suffix}`);
+          room.webSocketMessage(
+            socket,
+            JSON.stringify({
+              type: 'room:join',
+              requestId: `join-${suffix}`,
+              code: 'ABC234',
+              nickname,
+            }),
+          );
+          await nextEvent(events, 'room:state');
+          await nextEvent(events, 'command:ack');
+          await nextEvent(hostEvents, 'room:state');
+          return { socket, events };
+        }
+        const { socket: guestOne, events: guestOneEvents } =
+          await joinRecoveryPlayer('Guest One', 'recovery-guest-one');
+        const { socket: guestTwo, events: guestTwoEvents } =
+          await joinRecoveryPlayer('Guest Two', 'recovery-guest-two');
+
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:categories:update',
+            requestId: 'recovery-review-category',
+            categories: ['Animal'],
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(guestOneEvents, 'room:state');
+        await nextEvent(guestTwoEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:rounds:update',
+            requestId: 'recovery-review-rounds',
+            totalRounds: 1,
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(guestOneEvents, 'room:state');
+        await nextEvent(guestTwoEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'lobby:options:update',
+            requestId: 'recovery-review-options',
+            roundDurationSeconds: 60,
+            allowedLetters: ['A'],
+          }),
+        );
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(guestOneEvents, 'room:state');
+        await nextEvent(guestTwoEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(host, JSON.stringify({ type: 'game:start', requestId: 'start-recovery-review' }));
+        const started = await nextEvent(hostEvents, 'round:started');
+        await nextEvent(hostEvents, 'command:ack');
+
+        const playerIds = (room as unknown as {
+          room: { players: Array<{ id: string; isHost: boolean }> };
+        }).room.players;
+        const hostId = playerIds.find((player) => player.isHost)!.id;
+        const authorKey = `${hostId}:cat-0`;
+        room.webSocketMessage(
+          host,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId: 'recovery-submit-author',
+            roundId: started.id,
+            answers: { 'cat-0': 'Anta' },
+          }),
+        );
+        await nextEvent(hostEvents, 'command:ack');
+        room.webSocketMessage(
+          guestOne,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId: 'recovery-submit-guest-one',
+            roundId: started.id,
+            answers: { 'cat-0': 'Arara' },
+          }),
+        );
+        await nextEvent(guestOneEvents, 'command:ack');
+        room.webSocketMessage(
+          guestTwo,
+          JSON.stringify({
+            type: 'answer:submit',
+            requestId: 'recovery-submit-guest-two',
+            roundId: started.id,
+            answers: { 'cat-0': 'Abelha' },
+          }),
+        );
+        await nextEvent(guestTwoEvents, 'command:ack');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'round:stop', requestId: 'stop-recovery-review', roundId: started.id }),
+        );
+        const review = await nextEvent(hostEvents, 'round:review:category');
+        await nextEvent(hostEvents, 'command:ack');
+        const guestId = playerIds.find((player) => !player.isHost)!.id;
+        room.webSocketMessage(
+          guestOne,
+          JSON.stringify({
+            type: 'answer:vote',
+            requestId: 'vote-recovery-review',
+            roundId: started.id,
+            categoryId: 'cat-0',
+            answerPlayerId: hostId,
+            decision: 'invalidate',
+          }),
+        );
+        await nextEvent(guestOneEvents, 'round:review:category');
+        await nextEvent(hostEvents, 'round:review:category');
+        await nextEvent(guestOneEvents, 'command:ack');
+
+        const restoredRoom = new GameRoom(state);
+        const restored = restoredRoom as unknown as {
+          room: { phase: string; reviewDeadline?: number; players: Array<{ id: string; score: number }> };
+          currentRoundData: {
+            stopperId: string | null;
+            answers: Map<string, { votes?: Record<string, string>; eligibleVoters?: string[] }>;
+            scoredCategoryIndexes: Set<number>;
+          } | null;
+        };
+        await vi.waitFor(() => {
+          expect(restored.room.phase).toBe('CATEGORY_REVIEW');
+          expect(restored.currentRoundData?.answers.get(authorKey)?.votes?.[guestId]).toBe('invalidate');
+        });
+        expect(restored.currentRoundData?.stopperId).toBe(hostId);
+        expect(restored.currentRoundData?.answers.get(authorKey)?.eligibleVoters).toContain(guestId);
+        expect(restored.currentRoundData?.scoredCategoryIndexes.size).toBe(0);
+        expect(restored.room.reviewDeadline).toBe(review.deadline);
+
+        vi.setSystemTime(review.deadline! + 1);
+        const beforeAlarmScore = restored.room.players.find((player) => player.id === hostId)!.score;
+        const recoveredAfterDowntime = new GameRoom(state);
+        const scoreUpdate = await nextEvent(hostEvents, 'round:review:score_update');
+        expect(scoreUpdate.categoryScores[hostId]).toBe(5);
+        expect(
+          (recoveredAfterDowntime as unknown as { room: { players: Array<{ id: string; score: number }> } })
+            .room.players.find((player) => player.id === hostId)!.score,
+        ).toBe(beforeAlarmScore + 15);
+        await nextEvent(hostEvents, 'round:results');
+        await nextEvent(hostEvents, 'game:final_results');
+
+        const recoveredState = recoveredAfterDowntime as unknown as {
+          room: { phase: string; players: Array<{ id: string; score: number }> };
+          currentRoundData: { scoredCategoryIndexes: Set<number> } | null;
+        };
+        expect(recoveredState.room.phase).toBe('GAME_OVER');
+        expect(recoveredState.currentRoundData?.scoredCategoryIndexes).toContain(0);
+        const scoreAfterRecovery = recoveredState.room.players.find((player) => player.id === hostId)!.score;
+        await recoveredAfterDowntime.alarm();
+        expect(recoveredState.room.players.find((player) => player.id === hostId)!.score).toBe(scoreAfterRecovery);
+        expect(hostEvents.filter((event) => event.type === 'round:review:score_update')).toHaveLength(0);
+
+        const finalReplayEvents: ServerEvent[] = [];
+        const finalReplaySocket = await connect(recoveredAfterDowntime, 'ABC234', finalReplayEvents);
+        await negotiate(recoveredAfterDowntime, finalReplaySocket, finalReplayEvents, 'hello-final-replay');
+        recoveredAfterDowntime.webSocketMessage(
+          finalReplaySocket,
+          JSON.stringify({
+            type: 'session:resume',
+            requestId: 'resume-after-final',
+            resumeToken: joined.resumeToken,
+          }),
+        );
+        const resumed = await nextEvent(finalReplayEvents, 'session:resumed');
+        expect(resumed.state.phase).toBe('GAME_OVER');
+        await nextEvent(finalReplayEvents, 'player:presence');
+        await nextEvent(finalReplayEvents, 'room:state');
+        expect(await nextEvent(finalReplayEvents, 'game:final_results')).toMatchObject({
+          podium: expect.arrayContaining([expect.objectContaining({ playerId: hostId, score: scoreAfterRecovery })]),
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('keeps credentials private and persists only token verifiers', async () => {
       const { state, persisted } = makeDurableObjectState();
       const room = new GameRoom(state);
@@ -1245,6 +1914,187 @@ describe('room allocation and identity', () => {
       code: 'ROOM_ALREADY_EXISTS',
       requestId: 'create-again',
     });
+  });
+
+  describe('host succession and mutation guards', () => {
+      it('promotes the oldest active player when the host disconnects', async () => {
+        const { state } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        await allocate(room, 'ABC234');
+
+        const hostEvents: ServerEvent[] = [];
+        const host = await connect(room, 'ABC234', hostEvents);
+        await negotiate(room, host, hostEvents, 'hello-succession-host');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'room:create', requestId: 'create-succession-host', nickname: 'Host' }),
+        );
+        await nextEvent(hostEvents, 'room:joined');
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+
+        const firstEvents: ServerEvent[] = [];
+        const firstPlayer = await connect(room, 'ABC234', firstEvents);
+        await negotiate(room, firstPlayer, firstEvents, 'hello-succession-first');
+        room.webSocketMessage(
+          firstPlayer,
+          JSON.stringify({
+            type: 'room:join',
+            requestId: 'join-succession-first',
+            code: 'ABC234',
+            nickname: 'First',
+          }),
+        );
+        await nextEvent(firstEvents, 'room:state');
+        await nextEvent(firstEvents, 'command:ack');
+
+        const secondEvents: ServerEvent[] = [];
+        const secondPlayer = await connect(room, 'ABC234', secondEvents);
+        await negotiate(room, secondPlayer, secondEvents, 'hello-succession-second');
+        room.webSocketMessage(
+          secondPlayer,
+          JSON.stringify({
+            type: 'room:join',
+            requestId: 'join-succession-second',
+            code: 'ABC234',
+            nickname: 'Second',
+          }),
+        );
+        await nextEvent(secondEvents, 'room:state');
+        await nextEvent(secondEvents, 'command:ack');
+
+        const players = (room as unknown as { room: RoomState }).room.players;
+        const first = players.find((player) => player.nickname === 'First')!;
+        const second = players.find((player) => player.nickname === 'Second')!;
+        first.joinedAt = 10;
+        second.joinedAt = 20;
+
+        room.webSocketClose(host);
+        await vi.waitFor(() => {
+          expect((room as unknown as { room: RoomState }).room.players.find((player) => player.isHost)?.id)
+            .toBe(first.id);
+        });
+        expect((room as unknown as { room: RoomState }).room.players.find((player) => player.id === second.id)?.isHost)
+          .toBe(false);
+        await vi.waitFor(() => {
+          expect(firstEvents.some((event) =>
+            event.type === 'room:state' &&
+            event.state.players.some((player) => player.id === first.id && player.isHost),
+          )).toBe(true);
+        });
+      });
+
+      it('blocks host actions without an active host and assigns one when the host resumes', async () => {
+        const { state } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        await allocate(room, 'ABC234');
+        const hostEvents: ServerEvent[] = [];
+        const host = await connect(room, 'ABC234', hostEvents);
+        await negotiate(room, host, hostEvents, 'hello-no-host');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'room:create', requestId: 'create-no-host', nickname: 'Host' }),
+        );
+        const joined = await nextEvent(hostEvents, 'room:joined');
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+
+        room.webSocketClose(host);
+        await vi.waitFor(() => {
+          expect((room as unknown as { room: RoomState }).room.players[0].status).toBe('disconnected');
+        });
+        expect((room as unknown as { room: RoomState }).room.players[0].isHost).toBe(false);
+
+        const joinerEvents: ServerEvent[] = [];
+        const joiner = await connect(room, 'ABC234', joinerEvents);
+        await negotiate(room, joiner, joinerEvents, 'hello-no-host-joiner');
+        room.webSocketMessage(
+          joiner,
+          JSON.stringify({
+            type: 'room:join',
+            requestId: 'join-no-host-joiner',
+            code: 'ABC234',
+            nickname: 'Joiner',
+          }),
+        );
+        const joinedState = await nextEvent(joinerEvents, 'room:state');
+        await nextEvent(joinerEvents, 'command:ack');
+        expect(joinedState.state.players.every((player) => !player.isHost)).toBe(true);
+
+        room.webSocketMessage(
+          joiner,
+          JSON.stringify({ type: 'lobby:rounds:update', requestId: 'no-host-update', totalRounds: 8 }),
+        );
+        expect(await nextEvent(joinerEvents, 'error')).toMatchObject({
+          code: 'NOT_HOST',
+          requestId: 'no-host-update',
+        });
+
+        const resumedEvents: ServerEvent[] = [];
+        const resumed = await connect(room, 'ABC234', resumedEvents);
+        await negotiate(room, resumed, resumedEvents, 'hello-host-resume');
+        room.webSocketMessage(
+          resumed,
+          JSON.stringify({
+            type: 'session:resume',
+            requestId: 'resume-host',
+            resumeToken: joined.resumeToken,
+          }),
+        );
+        expect(await nextEvent(resumedEvents, 'session:resumed')).toMatchObject({
+          state: {
+            players: expect.arrayContaining([
+              expect.objectContaining({ id: joined.playerId, isHost: true, status: 'active' }),
+            ]),
+          },
+        });
+      });
+
+      it('rejects state-changing commands from connected sockets without active room membership', async () => {
+        const { state } = makeDurableObjectState();
+        const room = new GameRoom(state);
+        await allocate(room, 'ABC234');
+        const hostEvents: ServerEvent[] = [];
+        const host = await connect(room, 'ABC234', hostEvents);
+        await negotiate(room, host, hostEvents, 'hello-guard-host');
+        room.webSocketMessage(
+          host,
+          JSON.stringify({ type: 'room:create', requestId: 'create-guard-host', nickname: 'Host' }),
+        );
+        await nextEvent(hostEvents, 'room:joined');
+        await nextEvent(hostEvents, 'room:state');
+        await nextEvent(hostEvents, 'command:ack');
+
+        const outsiderEvents: ServerEvent[] = [];
+        const outsider = await connect(room, 'ABC234', outsiderEvents);
+        await negotiate(room, outsider, outsiderEvents, 'hello-guard-outsider');
+        const unauthorizedCommands = [
+          { type: 'lobby:categories:update', categories: ['Animal'] },
+          { type: 'lobby:rounds:update', totalRounds: 8 },
+          { type: 'lobby:options:update', roundDurationSeconds: 60, allowedLetters: ['A'] },
+          { type: 'game:start' },
+          { type: 'answer:submit', roundId: 'round-1', answers: {} },
+          { type: 'round:stop', roundId: 'round-1' },
+          {
+            type: 'answer:vote',
+            roundId: 'round-1',
+            categoryId: 'cat-0',
+            answerPlayerId: 'another-player',
+            decision: 'valid',
+          },
+          { type: 'round:next', roundId: 'round-1' },
+        ];
+        for (const [index, command] of unauthorizedCommands.entries()) {
+          const requestId = `guard-outsider-${index}`;
+          room.webSocketMessage(outsider, JSON.stringify({ ...command, requestId }));
+          expect(await nextEvent(outsiderEvents, 'error')).toMatchObject({
+            code: 'NOT_ELIGIBLE',
+            requestId,
+          });
+        }
+        expect((room as unknown as { room: RoomState }).room.totalRounds).toBe(5);
+        expect((room as unknown as { room: RoomState }).room.phase).toBe('CONFIGURING');
+      });
   });
 
   it('allows a second client to join the initialized room by the same code', async () => {

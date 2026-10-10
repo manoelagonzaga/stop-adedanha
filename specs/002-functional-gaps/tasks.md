@@ -165,14 +165,14 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 7
 
-- [ ] T035 [P] [US7] Add tests for category completion when all eligible decisions arrive, timeout completion with missing votes treated as agreement, sequential event order, and once-only score commits in `backend/src/test/game-room.test.ts`
+- [X] T035 [P] [US7] Add tests for category completion when all eligible decisions arrive, timeout completion with missing votes treated as agreement, sequential event order, and once-only score commits in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 7
 
-- [ ] T036 [US7] Persist explicit decisions and eligible voters, advance only when all required decisions arrive or the category deadline expires, and broadcast the next category from `backend/src/game-room.ts`
-- [ ] T037 [US7] Commit category points once and include per-category deltas plus authoritative cumulative scoreboard in `round:review:score_update` from `backend/src/game-room.ts`
-- [ ] T038 [US7] Update client review state only from server events and remove local category-tab navigation and duplicate cumulative score calculation in `frontend/src/hooks/useGameSocket.ts` and `frontend/src/screens/ResultsScreen.tsx`
-- [ ] T039 [US7] Render confirmed partial ranking and current category/deadline from server-provided state in `frontend/src/screens/ResultsScreen.tsx`
+- [X] T036 [US7] Persist explicit decisions and eligible voters, advance only when all required decisions arrive or the category deadline expires, and broadcast the next category from `backend/src/game-room.ts`
+- [X] T037 [US7] Commit category points once and include per-category deltas plus authoritative cumulative scoreboard in `round:review:score_update` from `backend/src/game-room.ts`
+- [X] T038 [US7] Update client review state only from server events and remove local category-tab navigation and duplicate cumulative score calculation in `frontend/src/hooks/useGameSocket.ts` and `frontend/src/screens/ResultsScreen.tsx`
+- [X] T039 [US7] Render confirmed partial ranking and current category/deadline from server-provided state in `frontend/src/screens/ResultsScreen.tsx`
 
 **Checkpoint**: No client can skip categories or derive a conflicting leaderboard; score updates are committed once.
 
@@ -186,13 +186,13 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 8
 
-- [ ] T040 [P] [US8] Add tests for `ROUND_RESULTS` host-only advancement, non-host rejection, duplicate/concurrent `round:next`, round numbering, and final-round completion in `backend/src/test/game-room.test.ts`
+- [X] T040 [P] [US8] Add tests for `ROUND_RESULTS` host-only advancement, non-host rejection, duplicate/concurrent `round:next`, round numbering, and final-round completion in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 8
 
-- [ ] T041 [US8] Add `round:next` command and idempotent host/phase/round checks; create the next round or final ranking from the server in `backend/src/game-room.ts`
-- [ ] T042 [US8] Add the authorized next-round command to canonical shared types and preserve the `ROUND_RESULTS`/`GAME_OVER` event data in `frontend/src/hooks/useGameSocket.ts`
-- [ ] T043 [US8] Show and enable “Próxima Rodada” only for the host after authoritative results; send the command instead of changing screen locally in `frontend/src/screens/ResultsScreen.tsx` and `frontend/src/App.tsx`
+- [X] T041 [US8] Add `round:next` command and idempotent host/phase/round checks; create the next round or final ranking from the server in `backend/src/game-room.ts`
+- [X] T042 [US8] Add the authorized next-round command to canonical shared types and preserve the `ROUND_RESULTS`/`GAME_OVER` event data in `frontend/src/hooks/useGameSocket.ts`
+- [X] T043 [US8] Show and enable “Próxima Rodada” only for the host after authoritative results; send the command instead of changing screen locally in `frontend/src/screens/ResultsScreen.tsx` and `frontend/src/App.tsx`
 
 **Checkpoint**: Multi-round matches progress only through host confirmation and cannot skip or double-start a round.
 
@@ -206,13 +206,13 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 9
 
-- [ ] T044 [P] [US9] Add storage-recreation tests for round answers/votes/stopper, review and round deadlines, scored-category markers, and expired-alarm replay in `backend/src/test/game-room.test.ts`
+- [X] T044 [P] [US9] Add storage-recreation tests for round answers/votes/stopper, review and round deadlines, scored-category markers, and expired-alarm replay in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 9
 
-- [ ] T045 [US9] Replace volatile-only round Maps/Sets with a serializable persisted round snapshot and once-only score/transition markers in `backend/src/game-room.ts`
-- [ ] T046 [US9] Restore room and round snapshot under `blockConcurrencyWhile` before processing socket commands or alarms, then reconcile expired deadlines once in `backend/src/game-room.ts`
-- [ ] T047 [US9] Restore the active UI view from post-restart authoritative snapshots and phase-specific events in `frontend/src/hooks/useGameSocket.ts`
+- [X] T045 [US9] Replace volatile-only round Maps/Sets with a serializable persisted round snapshot and once-only score/transition markers in `backend/src/game-room.ts`
+- [X] T046 [US9] Restore room and round snapshot under `blockConcurrencyWhile` before processing socket commands or alarms, then reconcile expired deadlines once in `backend/src/game-room.ts`
+- [X] T047 [US9] Restore the active UI view from post-restart authoritative snapshots and phase-specific events in `frontend/src/hooks/useGameSocket.ts`
 
 **Checkpoint**: Eviction/restart cannot erase in-progress answers or double-apply a category/round score.
 
@@ -226,13 +226,13 @@ description: "Executable implementation task list for the functional gaps featur
 
 ### Tests for User Story 10
 
-- [ ] T048 [P] [US10] Add tests for host succession by `joinedAt`, no-active-player behavior, and phase/status guards across state-changing commands in `backend/src/test/game-room.test.ts`
+- [X] T048 [P] [US10] Add tests for host succession by `joinedAt`, no-active-player behavior, and phase/status guards across state-changing commands in `backend/src/test/game-room.test.ts`
 
 ### Implementation for User Story 10
 
-- [ ] T049 [US10] Track stable join order and promote the oldest eligible active player on host departure; if none is active, keep host-only commands blocked until a player resumes or the room expires; broadcast the authoritative host change in `backend/src/game-room.ts`
-- [ ] T050 [US10] Apply a shared command guard for player membership, active status, host role, and allowed phase before each mutation in `backend/src/game-room.ts`
-- [ ] T051 [US10] Reflect host changes and suspended/disabled actions in the lobby and results views using room snapshots in `frontend/src/screens/LobbyScreen.tsx` and `frontend/src/screens/ResultsScreen.tsx`
+- [X] T049 [US10] Track stable join order and promote the oldest eligible active player on host departure; if none is active, keep host-only commands blocked until a player resumes or the room expires; broadcast the authoritative host change in `backend/src/game-room.ts`
+- [X] T050 [US10] Apply a shared command guard for player membership, active status, host role, and allowed phase before each mutation in `backend/src/game-room.ts`
+- [X] T051 [US10] Reflect host changes and suspended/disabled actions in the lobby and results views using room snapshots in `frontend/src/screens/LobbyScreen.tsx` and `frontend/src/screens/ResultsScreen.tsx`
 
 **Checkpoint**: Every room mutation has explicit authority and phase rules; host loss does not strand the lobby.
 

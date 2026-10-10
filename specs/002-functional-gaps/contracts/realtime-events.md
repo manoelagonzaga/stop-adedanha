@@ -73,7 +73,7 @@ Joins an initialized room during `CONFIGURING`. Reject unknown/closed rooms, dup
 
 Rebinds the new WebSocket to the existing player, rotates/renews the credential as appropriate, and returns a complete authoritative snapshot for the current phase.
 
-After `session:resumed`, the server replays the phase-specific event (`round:started`, `round:review:category`, or `round:results`) so the client receives current answers, category, and deadline without exposing those details in the general room snapshot.
+After `session:resumed`, the server replays the phase-specific event (`round:started`, `round:review:category`, `round:results`, or `game:final_results`) so the client receives current answers, category, deadline, or terminal ranking without exposing answer details in the general room snapshot.
 
 ### `lobby:categories:update`
 
@@ -131,6 +131,8 @@ Any active player may request Stop during `ROUND_ACTIVE`. The first serialized r
 
 An eligible active voter sets an explicit `valid` or `invalidate` decision for a response in the active category. The author cannot vote on their response. Repeating the same request is idempotent; changing a vote is allowed only while that category remains active.
 
+Once every eligible voter has decided on every automatically valid, non-empty answer in the active category, the room commits that category and advances immediately. Missing decisions at the category deadline are treated as agreement and do not add invalidation votes.
+
 ### `round:next`
 
 ```json
@@ -167,15 +169,15 @@ Contains the stable round ID, round number, letter, category snapshot, and optio
 
 ### `round:review:category`
 
-Contains active category index/total, category, all players' answers for the category, current vote state relevant to the client, eligible-voter count, and optional deadline. Does not include private credentials.
+Contains active category index/total, category, all players' answers for the category, current vote state relevant to the client, eligible-voter count, and optional deadline. It is rebroadcast after an accepted vote and when a category becomes active. Does not include private credentials.
 
 ### `round:review:score_update`
 
-Contains category index, per-player category points, and authoritative accumulated scoreboard after that category is committed. A score update is emitted once per committed category; provisional client calculations are not authoritative.
+Contains category index, per-player category point deltas, and authoritative accumulated scoreboard after that category is committed. A score update is emitted once per committed category; provisional client calculations are not authoritative. Category completion and advancement are server-driven; clients follow the category index and deadline in the next `round:review:category` event.
 
 ### `round:results`
 
-Contains all round answers, round points, and the accumulated ranking. For non-final rounds, phase becomes `ROUND_RESULTS` and the host may request the next round.
+Contains all round answers and the accumulated ranking. For non-final rounds, phase becomes `ROUND_RESULTS` and remains visible until the active host requests `round:next`. The final round transitions directly to `GAME_OVER` and broadcasts the final ranking after round points are committed.
 
 ### `game:final_results`
 
@@ -183,7 +185,7 @@ Contains the authoritative top-three podium and remaining ranking list after the
 
 ### `player:presence`
 
-Contains player ID, nickname, and `active`/`disconnected` status. Host succession is reflected through `room:state`.
+Contains player ID, nickname, and `active`/`disconnected` status. Host succession is reflected through `room:state`: on host departure, the active player with the earliest join order is promoted. If no active player remains, the snapshot contains no active host, and host-only commands are rejected until an existing player resumes or the room expires.
 
 ### `error`
 

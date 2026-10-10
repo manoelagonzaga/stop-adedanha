@@ -12,10 +12,10 @@ function createRoomConnection(roomCode = 'AB12CD') {
     storage: {
       get: vi.fn(async () => undefined),
       put: vi.fn(async () => undefined),
+      setAlarm: vi.fn(async () => undefined),
+      deleteAlarm: vi.fn(async () => undefined),
     },
-    blockConcurrencyWhile: vi.fn((callback: () => Promise<void>) => {
-      void callback();
-    }),
+    blockConcurrencyWhile: vi.fn((callback: () => Promise<void>) => callback()),
     acceptWebSocket,
     getWebSockets: vi.fn(() => (acceptedSocket ? [acceptedSocket] : [])),
   } as unknown as DurableObjectState;

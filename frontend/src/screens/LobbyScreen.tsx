@@ -38,7 +38,8 @@ export function LobbyScreen({
 }: LobbyScreenProps) {
   const { showToast } = useToast();
   const me = room.players.find((p: Player) => p.id === myPlayerId);
-  const isHost = me?.isHost ?? false;
+  const isHost = me?.isHost === true && me.status === 'active';
+  const hasActiveHost = room.players.some((player) => player.isHost && player.status === 'active');
 
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
@@ -140,7 +141,7 @@ export function LobbyScreen({
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
               <span className="material-symbols-outlined fill text-xs">star</span>
-              {isHost ? 'VOCÊ É O HOST' : 'CONVIDADO'}
+              {isHost ? 'VOCÊ É O HOST' : hasActiveHost ? 'CONVIDADO' : 'SEM ANFITRIÃO ATIVO'}
             </span>
             <span className="text-xs text-slate-400">•</span>
             <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
@@ -154,6 +155,11 @@ export function LobbyScreen({
           <p className="text-xs text-slate-500 md:text-sm">
             Personalize as rodadas, categorias e letras antes de iniciar a partida.
           </p>
+          {!hasActiveHost && (
+            <p role="status" className="mt-2 text-sm font-semibold text-amber-700">
+              Ações de anfitrião suspensas até um participante existente retomar a sessão.
+            </p>
+          )}
         </div>
 
         {/* Botões de Ação do Topo */}
@@ -178,6 +184,10 @@ export function LobbyScreen({
           ) : isHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
               Entre 2 jogadores ativos e configure ao menos uma categoria para iniciar.
+            </span>
+          ) : !hasActiveHost ? (
+            <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
+              Aguardando um anfitrião ativo…
             </span>
           ) : (
             <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-500">

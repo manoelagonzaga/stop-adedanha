@@ -25,6 +25,8 @@ Rules:
 - At most 20 active players may participate.
 - Nicknames are trimmed (maximum 24 Unicode code points) and unique case-insensitively within a room.
 - Configuration and host changes are accepted only in `CONFIGURING`.
+- If the host disconnects, the active player with the earliest `joinedAt` becomes host; equal timestamps are resolved by room player order. If no active player remains, the room has no host and host-only actions stay blocked until an existing player resumes or the room expires.
+- Only an active room member may mutate game state. Host-only actions additionally require the active host role and the command's allowed phase.
 - A game requires at least two active players and 1-20 unique, non-empty categories (maximum 40 Unicode code points per category name).
 - A room code routes to one Durable Object; uninitialized codes are not joinable rooms.
 - Unstarted/inactive rooms expire after 24 hours without valid activity; completed rooms expire one hour after `GAME_OVER`.
