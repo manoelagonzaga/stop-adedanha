@@ -1,9 +1,11 @@
+import { AVATAR_OPTIONS } from '../../shared/types';
 import type {
   Player,
   Category,
   Answer,
   RoomState,
   GamePhase,
+  Avatar,
   ClientCommand,
   ServerEvent,
 } from './types';
@@ -56,6 +58,10 @@ const HOST_ONLY_COMMANDS = new Set<ClientCommand['type']>([
   'game:start',
   'round:next',
 ]);
+
+function isAvatar(value: unknown): value is Avatar {
+  return typeof value === 'string' && AVATAR_OPTIONS.some((avatar) => avatar === value);
+}
 
 // ── Per-round data ─────────────────────────────────────────────────────────────
 
@@ -456,6 +462,7 @@ export class GameRoom implements DurableObject {
       type: 'room:create';
       requestId: string;
       nickname: string;
+      avatar?: Avatar;
       totalRounds?: number;
       roundDurationSeconds?: 0 | 60 | 90 | 120;
       allowedLetters?: string[];
@@ -491,6 +498,7 @@ export class GameRoom implements DurableObject {
       status: 'active',
       score: 0,
       joinedAt: this.nextJoinedAt(),
+      avatar: this.normalizeAvatar(cmd.avatar),
     };
 
     this.room = {
@@ -514,7 +522,7 @@ export class GameRoom implements DurableObject {
   private async handleRoomJoin(
     socket: WebSocket,
     playerId: string,
-    cmd: { type: 'room:join'; requestId: string; code: string; nickname: string }
+    cmd: { type: 'room:join'; requestId: string; code: string; nickname: string; avatar?: Avatar }
   ): Promise<void> {
     const requestedCode = this.sessionRoomCodes.get(socket);
     if (
@@ -557,6 +565,7 @@ export class GameRoom implements DurableObject {
     if (existing) {
       existing.status = 'active';
       existing.nickname = nickname;
+      existing.avatar = this.normalizeAvatar(cmd.avatar);
     } else {
       this.room.players.push({
         id: playerId,
@@ -565,6 +574,7 @@ export class GameRoom implements DurableObject {
         status: 'active',
         score: 0,
         joinedAt: this.nextJoinedAt(),
+        avatar: this.normalizeAvatar(cmd.avatar),
       });
     }
     await this.persistRoom();
@@ -1475,6 +1485,10 @@ export class GameRoom implements DurableObject {
   private isValidNickname(nickname: string): boolean {
     const length = Array.from(nickname).length;
     return length > 0 && length <= MAX_NICKNAME_CODE_POINTS;
+  }
+
+  private normalizeAvatar(avatar: Avatar | undefined): Avatar {
+    return isAvatar(avatar) ? avatar : AVATAR_OPTIONS[0];
   }
 
   private isValidRoundDuration(duration: unknown): duration is 0 | 60 | 90 | 120 {

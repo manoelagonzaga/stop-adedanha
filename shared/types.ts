@@ -8,6 +8,9 @@ export type GamePhase =
 
 export type ProtocolVersion = 1;
 
+export const AVATAR_OPTIONS = ['🦊', '🐙', '🐵', '🦁', '🐯', '🐼', '🐨', '🐸', '🦄'] as const;
+export type Avatar = (typeof AVATAR_OPTIONS)[number];
+
 export interface Player {
   id: string;
   nickname: string;
@@ -15,7 +18,7 @@ export interface Player {
   status: 'active' | 'disconnected';
   score: number;
   joinedAt?: number;
-  avatar?: string;
+  avatar?: Avatar;
 }
 
 export interface Category {
@@ -42,6 +45,7 @@ export interface PodiumItem {
   nickname: string;
   score: number;
   tier: 'gold' | 'silver' | 'bronze';
+  avatar?: Avatar;
 }
 
 export interface RankingListItem {
@@ -49,6 +53,7 @@ export interface RankingListItem {
   playerId: string;
   nickname: string;
   score: number;
+  avatar?: Avatar;
 }
 
 export interface FinalResults {
@@ -93,11 +98,12 @@ export type ClientCommand =
   | ({
       type: 'room:create';
       nickname: string;
+      avatar?: Avatar;
       totalRounds?: number;
       roundDurationSeconds?: 0 | 60 | 90 | 120;
       allowedLetters?: string[];
     } & CommandRequest)
-  | ({ type: 'room:join'; code: string; nickname: string } & CommandRequest)
+  | ({ type: 'room:join'; code: string; nickname: string; avatar?: Avatar } & CommandRequest)
   | ({ type: 'lobby:categories:update'; categories: string[] } & CommandRequest)
   | ({ type: 'lobby:rounds:update'; totalRounds: number } & CommandRequest)
   | ({

@@ -8,7 +8,7 @@ import { PodiumScreen } from './screens/PodiumScreen';
 import { clearResumeToken, useGameSocket, useGameState } from './hooks/useGameSocket';
 import { getBackendBaseUrl, getRoomWebSocketUrl, getRoomsApiUrl } from './utils/backendUrl';
 import type { GameState } from './hooks/useGameSocket';
-import type { ClientCommand, RoomState } from './types';
+import type { Avatar, ClientCommand, RoomState } from './types';
 
 
 const backendBaseUrl = getBackendBaseUrl(import.meta.env.VITE_BACKEND_URL, location.origin);
@@ -208,7 +208,7 @@ export default function App() {
     }
   }
 
-  async function handleCreateRoom(nickname: string) {
+  async function handleCreateRoom(nickname: string, avatar: Avatar) {
     setEntryError(null);
     setReconnectError(null);
     setIsRoomPending(true);
@@ -226,6 +226,7 @@ export default function App() {
           type: 'room:create',
           requestId,
           nickname,
+          avatar,
           roundDurationSeconds: 60,
           allowedLetters: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
         });
@@ -234,6 +235,7 @@ export default function App() {
             type: 'room:create',
             requestId,
             nickname,
+            avatar,
             roundDurationSeconds: 60,
             allowedLetters: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
           });
@@ -253,7 +255,7 @@ export default function App() {
     }
   }
 
-  function handleJoinRoom(nickname: string, code: string) {
+  function handleJoinRoom(nickname: string, code: string, avatar: Avatar) {
     const canonicalCode = code.trim().toUpperCase();
     clearResumeToken(canonicalCode);
     const requestId = crypto.randomUUID();
@@ -262,7 +264,13 @@ export default function App() {
     setIsRoomPending(true);
     pendingRoomRequestIdRef.current = requestId;
     pendingCommandRef.current = () => {
-      const command: ClientCommand = { type: 'room:join', requestId, code: canonicalCode, nickname };
+      const command: ClientCommand = {
+        type: 'room:join',
+        requestId,
+        code: canonicalCode,
+        nickname,
+        avatar,
+      };
       if (send(command)) {
         trackCommand(command);
       } else {

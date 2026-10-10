@@ -9,8 +9,8 @@ const room: RoomState = {
   code: 'ABC234',
   phase: 'CATEGORY_REVIEW',
   players: [
-    { id: 'author-1', nickname: 'Autora', isHost: true, status: 'active', score: 0 },
-    { id: 'voter-2', nickname: 'Votante', isHost: false, status: 'active', score: 0 },
+    { id: 'author-1', nickname: 'Autora', isHost: true, status: 'active', score: 0, avatar: '🐸' },
+    { id: 'voter-2', nickname: 'Votante', isHost: false, status: 'active', score: 0, avatar: '🐼' },
   ],
   categories: [{ id: 'cat-1', name: 'Animal' }],
   currentRound: 1,
@@ -45,6 +45,9 @@ describe('ResultsScreen authoritative voting', () => {
     );
 
     expect(screen.getByText('1 voto(s) para invalidar')).toBeInTheDocument();
+    expect(screen.getByText(/🐸 Autora/)).toBeInTheDocument();
+    expect(screen.getAllByText('🐸')).toHaveLength(1);
+    expect(screen.getAllByText('🐼')).toHaveLength(1);
     const validButton = screen.getByRole('button', { name: 'Válida' });
     expect(screen.getByRole('button', { name: 'Invalidar' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(validButton);

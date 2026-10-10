@@ -76,7 +76,7 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
       <div
         className={`flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br ${cfg.bg} ring-4 ${cfg.ring} text-3xl shadow-xl`}
       >
-        {getAvatar(item.playerId)}
+        {item.avatar ?? getAvatar(item.playerId)}
       </div>
 
       {/* Name + Score */}
@@ -166,7 +166,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-black text-slate-900">
                       {item.position}º
                     </span>
-                    <span className="text-xl">{getAvatar(item.playerId)}</span>
+                    <span className="text-xl">{item.avatar ?? getAvatar(item.playerId)}</span>
                     <span className="text-sm font-bold text-slate-900">
                       {item.nickname} {isMe && <span className="text-indigo-300">(Você)</span>}
                     </span>

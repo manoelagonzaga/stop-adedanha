@@ -181,11 +181,11 @@ export function LobbyScreen({
           <button
             type="button"
             onClick={handleCopyLink}
-            aria-label="Copiar Link da Sala"
+            aria-label={`Copiar Link da Sala #${room.code}`}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
             <span className="material-symbols-outlined text-lg">link</span>
-            Copiar Link da Sala
+            Copiar Link da Sala <span className="font-mono">#{room.code}</span>
           </button>
           {canStart ? (
             <button
@@ -472,9 +472,9 @@ export function LobbyScreen({
               <span className="flex min-w-0 items-center gap-3">
                 <span
                   aria-hidden="true"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xl"
                 >
-                  {player.nickname.slice(0, 1).toLocaleUpperCase()}
+                  {player.avatar ?? '🦊'}
                 </span>
                 <span className="truncate font-semibold text-slate-800">{player.nickname}</span>
                 {player.isHost && (

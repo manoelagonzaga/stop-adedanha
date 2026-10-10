@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/Toast';
 import { EntryScreen } from './EntryScreen';
@@ -42,7 +42,7 @@ describe('EntryScreen room join feedback', () => {
     }
 
     fireEvent.click(screen.getByRole('button', { name: /Entrar no Jogo Agora/ }));
-    expect(onEnterRoom).toHaveBeenCalledWith('Guest123', 'ABC234');
+    expect(onEnterRoom).toHaveBeenCalledWith('Guest123', 'ABC234', '🦊');
 
     rerender(
       <ToastProvider>
@@ -61,6 +61,28 @@ describe('EntryScreen room join feedback', () => {
       '4',
     ]);
     expect(screen.getByText(/ROOM_NOT_FOUND/)).toBeInTheDocument();
+  });
+
+  it('lets guests select an avatar and submits it with their room join', () => {
+    const onEnterRoom = vi.fn();
+    render(
+      <ToastProvider>
+        <EntryScreen onEnterRoom={onEnterRoom} onCreateRoom={vi.fn()} />
+      </ToastProvider>,
+    );
+
+    const guestAvatarGroup = screen.getAllByRole('group', { name: 'Seu Avatar' })[1];
+    fireEvent.click(within(guestAvatarGroup).getByRole('button', { name: 'Selecionar avatar 🐼' }));
+    fireEvent.change(screen.getByLabelText('Seu Apelido'), { target: { value: 'Guest' } });
+    for (const [index, char] of ['A', 'B', 'C', '2', '3', '4'].entries()) {
+      fireEvent.change(screen.getByLabelText(`Dígito ${index + 1} do código da sala`), {
+        target: { value: char },
+      });
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: /Entrar no Jogo Agora/ }));
+
+    expect(onEnterRoom).toHaveBeenCalledWith('Guest', 'ABC234', '🐼');
   });
 
   it('shows the pending connection state and disables duplicate room actions', () => {

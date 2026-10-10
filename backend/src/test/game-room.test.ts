@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import worker, { GameRoom } from '../index';
-import type { RoomState, ServerEvent } from '../types';
+import type { Player, RoomState, ServerEvent } from '../types';
 
 function makeDurableObjectState() {
   const serverSockets: WebSocket[] = [];
@@ -142,7 +142,7 @@ describe('room allocation and identity', () => {
   });
 
   describe('authoritative lobby configuration', () => {
-    async function createRoom(nickname = 'Host') {
+    async function createRoom(nickname = 'Host', avatar?: Player['avatar']) {
       const { state } = makeDurableObjectState();
       const room = new GameRoom(state);
       await allocate(room, 'ABC234');
@@ -151,7 +151,12 @@ describe('room allocation and identity', () => {
       await negotiate(room, host, events, 'hello-config-host');
       room.webSocketMessage(
         host,
-        JSON.stringify({ type: 'room:create', requestId: 'create-config-host', nickname }),
+        JSON.stringify({
+          type: 'room:create',
+          requestId: 'create-config-host',
+          nickname,
+          ...(avatar ? { avatar } : {}),
+        }),
       );
       await nextEvent(events, 'room:joined');
       await nextEvent(events, 'room:state');
@@ -159,7 +164,7 @@ describe('room allocation and identity', () => {
       return { room, host, events, state };
     }
 
-    async function joinGuest(room: GameRoom) {
+    async function joinGuest(room: GameRoom, avatar?: Player['avatar']) {
       const events: ServerEvent[] = [];
       const guest = await connect(room, 'ABC234', events);
       await negotiate(room, guest, events, 'hello-config-guest');
@@ -170,11 +175,12 @@ describe('room allocation and identity', () => {
           requestId: 'join-config-guest',
           code: 'ABC234',
           nickname: 'Guest',
+          ...(avatar ? { avatar } : {}),
         }),
       );
-      await nextEvent(events, 'room:state');
+      const joinedState = await nextEvent(events, 'room:state');
       await nextEvent(events, 'command:ack');
-      return { guest, events };
+      return { guest, events, joinedState };
     }
 
     it('serializes rapid host configuration commands and acknowledges each committed update', async () => {
@@ -215,6 +221,16 @@ describe('room allocation and identity', () => {
         roundDurationSeconds: 90,
         allowedLetters: ['A', 'B'],
       });
+    });
+
+    it('stores selected avatars for hosts and guests in the authoritative room state', async () => {
+      const { room, events } = await createRoom('Host', '🐼');
+      const { joinedState } = await joinGuest(room, '🐸');
+
+      const hostSnapshot = (room as unknown as { room: RoomState }).room;
+      expect(hostSnapshot.players.map((player) => player.avatar)).toEqual(['🐼', '🐸']);
+      expect(joinedState.state.players.map((player) => player.avatar)).toEqual(['🐼', '🐸']);
+      expect(events.some((event) => event.type === 'room:state')).toBe(true);
     });
 
     it('persists and broadcasts host configuration changes after a guest joins', async () => {

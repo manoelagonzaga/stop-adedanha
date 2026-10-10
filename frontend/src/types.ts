@@ -1,5 +1,6 @@
 export type {
   GamePhase,
+  Avatar,
   Player,
   RoomState,
   Answer,
