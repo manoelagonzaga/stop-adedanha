@@ -2,15 +2,20 @@ import { useState, useRef } from 'react';
 import { useToast } from '../components/Toast';
 
 interface EntryScreenProps {
-  onEnterRoom: (nickname: string, roomCode: string, avatar: string) => void;
-  onCreateRoom: (nickname: string, roomCode: string, avatar: string) => void;
+  onEnterRoom: (nickname: string, roomCode: string) => void;
+  onCreateRoom: (nickname: string) => void | Promise<void>;
   error?: string | null;
   isLoading?: boolean;
 }
 
 const AVATAR_OPTIONS = ['🦊', '🐙', '🐵', '🦁', '🐯', '🐼', '🐨', '🐸', '🦄'];
 
-export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenProps) {
+export function EntryScreen({
+  onEnterRoom,
+  onCreateRoom,
+  error,
+  isLoading = false,
+}: EntryScreenProps) {
   const { showToast } = useToast();
 
   const [createNick, setCreateNick] = useState('CapitãoPalavra');
@@ -18,7 +23,7 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
   const [selectedAvatar, setSelectedAvatar] = useState('🦊');
 
   // 6-digit PIN state
-  const [pinDigits, setPinDigits] = useState<string[]>(['S', 'T', 'P', '9', '4', '8']);
+  const [pinDigits, setPinDigits] = useState<string[]>(['', '', '', '', '', '']);
   const pinInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   function handleDigitChange(index: number, value: string) {
@@ -41,18 +46,21 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
 
   function handlePastePin(e?: React.ClipboardEvent) {
     if (e) e.preventDefault();
-    navigator.clipboard?.readText().then((text) => {
-      const clean = text.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
-      if (clean) {
-        const digits = clean.split('');
-        while (digits.length < 6) digits.push('');
-        setPinDigits(digits);
-        showToast(`Código #${clean} inserido!`);
+    if (!navigator.clipboard) {
+      showToast('A área de transferência não está disponível neste navegador.');
+      return;
+    }
+    navigator.clipboard.readText().then((text) => {
+      const linkCode = text.trim().match(/\/rooms\/([A-Za-z0-9]{6})\/?$/)?.[1];
+      const clean = (linkCode ?? text).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+      if (clean.length === 6) {
+        setPinDigits(clean.split(''));
+        showToast(`Código ${clean} preenchido.`);
+      } else {
+        showToast('Não encontrei um código de sala válido na área de transferência.');
       }
     }).catch(() => {
-      // Fallback
-      setPinDigits(['S', 'T', 'P', '9', '4', '8']);
-      showToast('Código #STP-948 inserido automaticamente!');
+      showToast('Não foi possível ler a área de transferência. Digite o código nos campos.');
     });
   }
 
@@ -68,11 +76,7 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
       showToast('Por favor, informe seu apelido.');
       return;
     }
-    // Generate 6-char room code
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const code = 'STP-' + Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    showToast('Sala privada criada com sucesso!');
-    onCreateRoom(nick, code, selectedAvatar);
+    void onCreateRoom(nick);
   }
 
   function handleActionJoin() {
@@ -82,12 +86,11 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
       return;
     }
     const code = pinDigits.join('').trim();
-    if (code.length < 3) {
-      showToast('Por favor, digite o código da sala.');
+    if (code.length !== 6) {
+      showToast('Digite os 6 caracteres do código da sala.');
       return;
     }
-    showToast(`Conectando à sala #${code}...`);
-    onEnterRoom(nick, code, selectedAvatar);
+    onEnterRoom(nick, code);
   }
 
   return (
@@ -206,14 +209,15 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
             <button
               type="button"
               onClick={handleActionCreate}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-[0.99]"
+              disabled={isLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-xl">rocket_launch</span>
-              Criar Sala e Convidar Amigos
+              {isLoading ? 'Conectando à sala...' : 'Criar Sala e Convidar Amigos'}
             </button>
             <p className="mt-2.5 flex items-center justify-center gap-1 text-center text-[11px] font-medium text-slate-400">
               <span className="material-symbols-outlined text-sm text-emerald-500">check_circle</span>
-              Link direto e código gerados na hora • Até 12 jogadores
+              Código exclusivo gerado pelo servidor • Até 20 jogadores
             </p>
           </div>
         </div>
@@ -279,7 +283,7 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
                   ))}
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400">
-                  <span>Exemplo: STP-948</span>
+                  <span>Informe o código de 6 caracteres</span>
                   <button
                     type="button"
                     onClick={() => handlePastePin()}
@@ -296,10 +300,11 @@ export function EntryScreen({ onEnterRoom, onCreateRoom, error }: EntryScreenPro
             <button
               type="button"
               onClick={handleActionJoin}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-base font-bold text-white shadow-lg shadow-rose-300/50 transition hover:bg-rose-700 active:scale-[0.99]"
+              disabled={isLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-base font-bold text-white shadow-lg shadow-rose-300/50 transition hover:bg-rose-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-xl">sports_esports</span>
-              Entrar no Jogo Agora
+              {isLoading ? 'Conectando à sala...' : 'Entrar no Jogo Agora'}
             </button>
             <p className="mt-2.5 text-center text-[11px] font-medium text-slate-400">
               Não precisa de cadastro ou download • Direto no navegador

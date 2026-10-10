@@ -1,5 +1,4 @@
 import type {
-  GamePhase,
   Player,
   Category,
   Answer,
@@ -12,13 +11,15 @@ import {
   computeRoundScores,
   resolveInvalidation,
   buildFinalRanking,
-  STOP_BONUS_PTS,
   type RoundSnapshot,
 } from './scoring';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MAX_PLAYERS = 20;
+const MAX_COMMAND_BYTES = 16 * 1024;
+const MAX_REQUEST_IDS = 4096;
+const MAX_REQUEST_ID_LENGTH = 128;
 const DEFAULT_ROUNDS = 5;
 const ROUND_DURATION_MS = 90_000; // 90 seconds per round
 const REVIEW_CATEGORY_DURATION_MS = 30_000; // 30 seconds per category review
@@ -59,6 +60,12 @@ export class GameRoom implements DurableObject {
 
   // WebSocket session map: ws → playerId
   private sessions: Map<WebSocket, string> = new Map();
+  private sessionRoomCodes = new Map<WebSocket, string>();
+  private negotiatedSockets = new Set<WebSocket>();
+  private requestIds = new Set<string>();
+  private requestIdOrder: string[] = [];
+  private inFlightRequests = new Set<string>();
+  private failedRequests = new Set<string>();
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -82,44 +89,154 @@ export class GameRoom implements DurableObject {
   // ── WebSocket lifecycle ─────────────────────────────────────────────────────
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/__allocate') {
+      let allocation: unknown;
+      try {
+        allocation = await request.json();
+      } catch {
+        return Response.json({ error: 'INVALID_ALLOCATION' }, { status: 400 });
+      }
+
+      const code =
+        allocation && typeof allocation === 'object' && 'code' in allocation
+          ? String(allocation.code).toUpperCase()
+          : '';
+      if (!/^[ABCDEFGHJKLMNPRSTUVWXY23456789]{6}$/.test(code)) {
+        return Response.json({ error: 'INVALID_ALLOCATION' }, { status: 400 });
+      }
+      if (this.room.code || this.room.phase !== 'WAITING_PLAYERS') {
+        return Response.json({ error: 'ROOM_ALREADY_EXISTS' }, { status: 409 });
+      }
+
+      this.room.code = code;
+      await this.persistRoom();
+      return Response.json({ code }, { status: 201 });
+    }
+
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
       return Response.json({ error: 'WEBSOCKET_REQUIRED' }, { status: 426 });
     }
 
+    const roomCode = url.pathname.match(/^\/rooms\/([A-Za-z0-9-]+)\/?$/)?.[1]?.toUpperCase() ?? '';
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     const playerId = crypto.randomUUID();
 
     this.state.acceptWebSocket(server, [playerId]);
     this.sessions.set(server, playerId);
+    this.sessionRoomCodes.set(server, roomCode);
 
-    // Send session ready
-    this.sendTo(server, { type: 'session:ready', playerId });
+    this.sendTo(server, {
+      type: 'session:ready',
+      playerId,
+      supportedProtocolVersions: [1],
+    });
 
     return new Response(null, { status: 101, webSocket: client });
   }
 
   webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
-    if (typeof message !== 'string') return;
-
     const playerId = this.sessions.get(socket);
     if (!playerId) return;
 
-    let cmd: ClientCommand;
-    try {
-      cmd = JSON.parse(message) as ClientCommand;
-    } catch {
-      this.sendTo(socket, { type: 'error', code: 'INVALID_JSON', message: 'Cannot parse JSON' });
+    if (typeof message !== 'string') {
+      this.sendError(socket, 'INVALID_MESSAGE', 'Only text messages are supported');
       return;
     }
 
-    this.handleCommand(socket, playerId, cmd).catch((err) => {
-      console.error('[GameRoom] handleCommand error:', err);
+    if (new TextEncoder().encode(message).byteLength > MAX_COMMAND_BYTES) {
+      this.sendError(socket, 'PAYLOAD_TOO_LARGE', 'Command payload exceeds 16 KiB');
+      return;
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(message);
+    } catch {
+      this.sendError(socket, 'INVALID_JSON', 'Cannot parse JSON');
+      return;
+    }
+
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      Array.isArray(payload) ||
+      typeof (payload as Record<string, unknown>).type !== 'string'
+    ) {
+      this.sendError(socket, 'INVALID_COMMAND', 'Command must be a JSON object with a type');
+      return;
+    }
+
+    const commandPayload = payload as Record<string, unknown>;
+    const requestId = commandPayload.requestId;
+    if (
+      typeof requestId !== 'string' ||
+      requestId.trim().length === 0 ||
+      requestId.length > MAX_REQUEST_ID_LENGTH
+    ) {
+      this.sendError(socket, 'INVALID_REQUEST_ID', 'A valid requestId is required');
+      return;
+    }
+
+    if (commandPayload.type === 'session:hello') {
+      if (this.negotiatedSockets.has(socket)) {
+        this.sendError(socket, 'INVALID_PHASE', 'Protocol negotiation already completed', requestId);
+        return;
+      }
+      if (commandPayload.protocolVersion !== 1) {
+        this.sendError(socket, 'PROTOCOL_UNSUPPORTED', 'Protocol version is not supported', requestId);
+        return;
+      }
+      if (!this.rememberRequestId(playerId, requestId)) {
+        this.sendError(socket, 'ALREADY_PROCESSED', 'This request was already processed', requestId);
+        return;
+      }
+
+      this.negotiatedSockets.add(socket);
       this.sendTo(socket, {
-        type: 'error',
-        code: 'INTERNAL_ERROR',
-        message: String(err),
+        type: 'session:ready',
+        playerId,
+        supportedProtocolVersions: [1],
+        negotiatedProtocolVersion: 1,
       });
+      this.sendTo(socket, {
+        type: 'command:ack',
+        requestId,
+        commandType: 'session:hello',
+        status: 'committed',
+      });
+      return;
+    }
+
+    if (!this.negotiatedSockets.has(socket)) {
+      this.sendError(socket, 'PROTOCOL_REQUIRED', 'Send session:hello before room commands', requestId);
+      return;
+    }
+
+    if (!this.rememberRequestId(playerId, requestId)) {
+      this.sendError(socket, 'ALREADY_PROCESSED', 'This request was already processed', requestId, false);
+      return;
+    }
+
+    const cmd = payload as ClientCommand;
+    const requestKey = this.requestKey(playerId, requestId);
+    this.inFlightRequests.add(requestKey);
+    this.handleCommand(socket, playerId, cmd).then(() => {
+      this.inFlightRequests.delete(requestKey);
+      if (this.failedRequests.delete(requestKey)) return;
+      this.sendTo(socket, {
+        type: 'command:ack',
+        requestId,
+        commandType: cmd.type,
+        status: 'committed',
+      });
+    }).catch((err) => {
+      console.error('[GameRoom] handleCommand error:', err);
+      this.sendError(socket, 'INTERNAL_ERROR', 'An unexpected server error occurred', requestId);
+      this.inFlightRequests.delete(requestKey);
+      this.failedRequests.delete(requestKey);
     });
   }
 
@@ -127,6 +244,8 @@ export class GameRoom implements DurableObject {
     const playerId = this.sessions.get(socket);
     if (playerId) {
       this.sessions.delete(socket);
+      this.sessionRoomCodes.delete(socket);
+      this.negotiatedSockets.delete(socket);
       this.setPlayerStatus(playerId, 'disconnected');
     }
   }
@@ -152,7 +271,7 @@ export class GameRoom implements DurableObject {
       case 'lobby:rounds:update':
         return this.handleRoundsUpdate(socket, playerId, cmd);
       case 'game:start':
-        return this.handleGameStart(socket, playerId);
+        return this.handleGameStart(socket, playerId, cmd);
       case 'answer:submit':
         return this.handleAnswerSubmit(socket, playerId, cmd);
       case 'round:stop':
@@ -160,11 +279,7 @@ export class GameRoom implements DurableObject {
       case 'answer:invalidate':
         return this.handleAnswerInvalidate(socket, playerId, cmd);
       default:
-        this.sendTo(socket, {
-          type: 'error',
-          code: 'UNKNOWN_COMMAND',
-          message: `Unknown command type`,
-        });
+        this.sendError(socket, 'UNKNOWN_COMMAND', 'Unknown command type', cmd.requestId);
     }
   }
 
@@ -175,29 +290,21 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: { type: 'room:create'; requestId: string; nickname: string; totalRounds?: number }
   ): Promise<void> {
-    if (this.room.phase !== 'WAITING_PLAYERS') {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'ROOM_ALREADY_EXISTS',
-        message: 'Room already initialized',
-        requestId: cmd.requestId,
-      });
+    const requestedCode = this.sessionRoomCodes.get(socket);
+    if (!this.room.code || !requestedCode || requestedCode !== this.room.code) {
+      this.sendError(socket, 'ROOM_NOT_FOUND', 'Room code has not been allocated', cmd.requestId);
+      return;
+    }
+    if (this.room.phase !== 'WAITING_PLAYERS' || this.room.players.length > 0) {
+      this.sendError(socket, 'ROOM_ALREADY_EXISTS', 'Room already initialized', cmd.requestId);
       return;
     }
 
     const nickname = cmd.nickname.trim();
     if (!nickname) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'INVALID_NICKNAME',
-        message: 'Nickname is required',
-        requestId: cmd.requestId,
-      });
+      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname is required', cmd.requestId);
       return;
     }
-
-    // Use the DO id (url path segment) as room code
-    const code = this.generateCode();
 
     const hostPlayer: Player = {
       id: playerId,
@@ -208,7 +315,7 @@ export class GameRoom implements DurableObject {
     };
 
     this.room = {
-      code,
+      code: requestedCode,
       phase: 'CONFIGURING',
       players: [hostPlayer],
       categories: DEFAULT_CATEGORIES,
@@ -227,25 +334,30 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: { type: 'room:join'; requestId: string; code: string; nickname: string }
   ): Promise<void> {
+    const requestedCode = this.sessionRoomCodes.get(socket);
+    if (
+      !this.room.code ||
+      !requestedCode ||
+      requestedCode !== this.room.code ||
+      cmd.code.trim().toUpperCase() !== this.room.code
+    ) {
+      this.sendError(socket, 'ROOM_NOT_FOUND', 'Room does not exist', cmd.requestId);
+      return;
+    }
+    if (this.room.phase !== 'CONFIGURING') {
+      this.sendError(socket, 'INVALID_PHASE', 'Room is not accepting new players', cmd.requestId);
+      return;
+    }
+
     const nickname = cmd.nickname.trim();
 
     if (!nickname) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'INVALID_NICKNAME',
-        message: 'Nickname is required',
-        requestId: cmd.requestId,
-      });
+      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname is required', cmd.requestId);
       return;
     }
 
     if (this.room.players.length >= MAX_PLAYERS) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'ROOM_FULL',
-        message: 'Room is full',
-        requestId: cmd.requestId,
-      });
+      this.sendError(socket, 'ROOM_FULL', 'Room is full', cmd.requestId);
       return;
     }
 
@@ -254,12 +366,7 @@ export class GameRoom implements DurableObject {
         (p) => p.nickname.toLowerCase() === nickname.toLowerCase() && p.status === 'active'
       )
     ) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'DUPLICATE_NICKNAME',
-        message: 'Nickname already in use',
-        requestId: cmd.requestId,
-      });
+      this.sendError(socket, 'DUPLICATE_NICKNAME', 'Nickname already in use', cmd.requestId);
       return;
     }
 
@@ -302,12 +409,7 @@ export class GameRoom implements DurableObject {
     cmd: { type: 'lobby:categories:update'; requestId: string; categories: string[] }
   ): Promise<void> {
     if (!this.isHost(playerId)) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'NOT_HOST',
-        message: 'Only the host can update categories',
-        requestId: cmd.requestId,
-      });
+      this.sendError(socket, 'NOT_HOST', 'Only the host can update categories', cmd.requestId);
       return;
     }
 
@@ -327,12 +429,7 @@ export class GameRoom implements DurableObject {
     cmd: { type: 'lobby:rounds:update'; requestId: string; totalRounds: number }
   ): Promise<void> {
     if (!this.isHost(playerId)) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'NOT_HOST',
-        message: 'Only the host can update rounds',
-        requestId: cmd.requestId,
-      });
+      this.sendError(socket, 'NOT_HOST', 'Only the host can update rounds', cmd.requestId);
       return;
     }
 
@@ -343,22 +440,18 @@ export class GameRoom implements DurableObject {
 
   // ── Game: Start ────────────────────────────────────────────────────────────
 
-  private async handleGameStart(socket: WebSocket, playerId: string): Promise<void> {
+  private async handleGameStart(
+    socket: WebSocket,
+    playerId: string,
+    cmd: Extract<ClientCommand, { type: 'game:start' }>,
+  ): Promise<void> {
     if (!this.isHost(playerId)) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'NOT_HOST',
-        message: 'Only the host can start the game',
-      });
+      this.sendError(socket, 'NOT_HOST', 'Only the host can start the game', cmd.requestId);
       return;
     }
 
     if (this.room.players.filter((p) => p.status === 'active').length < 1) {
-      this.sendTo(socket, {
-        type: 'error',
-        code: 'NOT_ENOUGH_PLAYERS',
-        message: 'Need at least 1 player to start',
-      });
+      this.sendError(socket, 'NOT_ENOUGH_PLAYERS', 'Need at least 1 player to start', cmd.requestId);
       return;
     }
 
@@ -656,6 +749,38 @@ export class GameRoom implements DurableObject {
     }
   }
 
+  private requestKey(playerId: string, requestId: string): string {
+    return `${playerId}\u0000${requestId}`;
+  }
+
+  private rememberRequestId(playerId: string, requestId: string): boolean {
+    const key = this.requestKey(playerId, requestId);
+    if (this.requestIds.has(key)) return false;
+
+    this.requestIds.add(key);
+    this.requestIdOrder.push(key);
+    if (this.requestIdOrder.length > MAX_REQUEST_IDS) {
+      const expiredKey = this.requestIdOrder.shift();
+      if (expiredKey) this.requestIds.delete(expiredKey);
+    }
+    return true;
+  }
+
+  private sendError(
+    socket: WebSocket,
+    code: string,
+    message: string,
+    requestId?: string,
+    trackFailure = true,
+  ): void {
+    const playerId = this.sessions.get(socket);
+    if (trackFailure && playerId && requestId) {
+      const key = this.requestKey(playerId, requestId);
+      if (this.inFlightRequests.has(key)) this.failedRequests.add(key);
+    }
+    this.sendTo(socket, { type: 'error', code, message, requestId });
+  }
+
   private sendTo(socket: WebSocket, event: ServerEvent): void {
     try {
       socket.send(JSON.stringify(event));
@@ -681,11 +806,6 @@ export class GameRoom implements DurableObject {
 
   private async persistRoom(): Promise<void> {
     await this.state.storage.put('room', this.room);
-  }
-
-  private generateCode(): string {
-    const chars = 'ABCDEFGHJKLMNPRSTUVWXY23456789';
-    return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   }
 
   private pickLetter(): string {

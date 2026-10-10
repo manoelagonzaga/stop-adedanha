@@ -6,12 +6,15 @@ export type GamePhase =
   | 'ROUND_RESULTS'
   | 'GAME_OVER';
 
+export type ProtocolVersion = 1;
+
 export interface Player {
   id: string;
   nickname: string;
   isHost: boolean;
   status: 'active' | 'disconnected';
   score: number;
+  avatar?: string;
 }
 
 export interface Category {
@@ -59,22 +62,85 @@ export interface RoomState {
   roundDeadline?: number;
   currentReviewCategoryIndex?: number;
   reviewDeadline?: number;
+  roundDurationSeconds?: 0 | 60 | 90 | 120;
+  allowedLetters?: string[];
+  currentRoundId?: string;
+}
+
+export interface CommandRequest {
+  requestId: string;
+  protocolVersion?: ProtocolVersion;
+}
+
+export interface RoomSettings {
+  totalRounds: number;
+  roundDurationSeconds: 0 | 60 | 90 | 120;
+  allowedLetters: string[];
 }
 
 // Client to Server Commands
 export type ClientCommand =
-  | { type: 'room:create'; requestId: string; nickname: string; totalRounds?: number }
-  | { type: 'room:join'; requestId: string; code: string; nickname: string }
-  | { type: 'lobby:categories:update'; requestId: string; categories: string[] }
-  | { type: 'game:start'; requestId: string }
-  | { type: 'answer:submit'; requestId: string; roundId: string; answers: Record<string, string> }
-  | { type: 'round:stop'; requestId: string; roundId: string }
-  | { type: 'answer:invalidate'; requestId: string; roundId: string; categoryId: string; answerId: string };
+  | ({ type: 'session:hello'; protocolVersion: ProtocolVersion } & CommandRequest)
+  | ({ type: 'session:resume'; resumeToken: string } & CommandRequest)
+  | ({ type: 'room:create'; nickname: string; totalRounds?: number } & CommandRequest)
+  | ({ type: 'room:join'; code: string; nickname: string } & CommandRequest)
+  | ({ type: 'lobby:categories:update'; categories: string[] } & CommandRequest)
+  | ({ type: 'lobby:rounds:update'; totalRounds: number } & CommandRequest)
+  | ({
+      type: 'lobby:options:update';
+      roundDurationSeconds: 0 | 60 | 90 | 120;
+      allowedLetters: string[];
+    } & CommandRequest)
+  | ({ type: 'game:start' } & CommandRequest)
+  | ({ type: 'answer:submit'; roundId: string; answers: Record<string, string> } & CommandRequest)
+  | ({ type: 'round:stop'; roundId: string } & CommandRequest)
+  | ({
+      type: 'answer:vote';
+      roundId: string;
+      categoryId: string;
+      answerPlayerId: string;
+      decision: 'valid' | 'invalidate';
+    } & CommandRequest)
+  | ({ type: 'answer:invalidate'; roundId: string; categoryId: string; answerId: string } & CommandRequest)
+  | ({ type: 'round:next'; roundId: string } & CommandRequest);
 
 // Server to Client Events
 export type ServerEvent =
+  | {
+      type: 'session:ready';
+      playerId?: string;
+      supportedProtocolVersions?: ProtocolVersion[];
+      negotiatedProtocolVersion?: ProtocolVersion;
+    }
+  | {
+      type: 'room:joined';
+      requestId: string;
+      playerId: string;
+      resumeToken: string;
+    }
+  | {
+      type: 'session:resumed';
+      requestId: string;
+      playerId: string;
+      resumeToken: string;
+      state: RoomState;
+    }
   | { type: 'room:state'; state: RoomState }
-  | { type: 'round:started'; id: string; letter: string; categories: Category[]; deadline: number }
+  | {
+      type: 'command:ack';
+      requestId: string;
+      commandType: ClientCommand['type'];
+      status: 'committed' | 'duplicate';
+    }
+  | {
+      type: 'round:started';
+      id: string;
+      roundId?: string;
+      roundNumber?: number;
+      letter: string;
+      categories: Category[];
+      deadline?: number;
+    }
   | {
       type: 'round:review:category';
       categoryIndex: number;
@@ -82,7 +148,7 @@ export type ServerEvent =
       category: Category;
       answers: Answer[];
       eligibleVoters: number;
-      deadline: number;
+      deadline?: number;
     }
   | {
       type: 'round:review:score_update';
@@ -90,9 +156,8 @@ export type ServerEvent =
       categoryScores: Record<string, number>;
       scoreboard: Player[];
     }
-  | { type: 'round:results'; answers: Answer[]; ranking: Player[] }
+  | { type: 'round:results'; answers: Answer[]; ranking: Player[]; roundScores?: Record<string, number> }
   | { type: 'game:final_results'; podium: PodiumItem[]; list: RankingListItem[] }
   | { type: 'player:presence'; id: string; nickname: string; status: 'active' | 'disconnected' }
-  | { type: 'error'; code: string; message: string };
-
+  | { type: 'error'; code: string; message: string; requestId?: string };
 

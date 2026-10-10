@@ -43,7 +43,16 @@ export function useGameSocket({ url, onEvent }: UseGameSocketOptions) {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        if (!cancelled) setStatus('connected');
+        if (!cancelled) {
+          setStatus('connected');
+          ws.send(
+            JSON.stringify({
+              type: 'session:hello',
+              requestId: crypto.randomUUID(),
+              protocolVersion: 1,
+            }),
+          );
+        }
       };
 
       ws.onmessage = (e) => {
@@ -99,10 +108,10 @@ export function useGameState() {
 
   const handleEvent = useCallback((event: ServerEvent) => {
     switch (event.type) {
-      case 'session:ready' as string: {
-        // Custom event sent by server on WS connect
-        const e = event as unknown as { type: 'session:ready'; playerId: string };
-        setState((s) => ({ ...s, myPlayerId: e.playerId }));
+      case 'session:ready': {
+        if (event.playerId) {
+          setState((s) => ({ ...s, myPlayerId: event.playerId ?? null }));
+        }
         break;
       }
 

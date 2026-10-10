@@ -7,12 +7,17 @@
     "build": "tsc -b",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "",
-    "lint": ""
+    "test": "vitest run",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.0",
     "@cloudflare/workers-types": "^5.20260908.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.71.1",
     "vitest": "^5.0.2",
     "wrangler": "^4.40.0"
   }

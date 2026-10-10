@@ -9,6 +9,8 @@ export type {
   FinalResults,
   ClientCommand,
   ServerEvent,
+  ProtocolVersion,
+  CommandRequest,
+  RoomSettings,
 } from '../../shared/types';
-
 

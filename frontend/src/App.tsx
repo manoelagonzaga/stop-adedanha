@@ -42,7 +42,10 @@ function buildFinalResults(room: RoomState): import('./types').FinalResults {
 export default function App() {
   const [screen, setScreen] = useState<UIScreen>('início');
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [isRoomPending, setIsRoomPending] = useState(false);
   const pendingCommandRef = useRef<(() => void) | null>(null);
+  const pendingRoomRequestIdRef = useRef<string | null>(null);
 
   const { state, setState, handleEvent } = useGameState();
 
@@ -52,6 +55,9 @@ export default function App() {
 
       // Drive screen transitions from server events
       if (event.type === 'room:state') {
+        pendingRoomRequestIdRef.current = null;
+        setEntryError(null);
+        setIsRoomPending(false);
         const phase = event.state.phase;
         if (phase === 'CONFIGURING' || phase === 'WAITING_PLAYERS') setScreen('configuração');
         else if (phase === 'ROUND_ACTIVE') setScreen('jogo');
@@ -62,8 +68,24 @@ export default function App() {
       if (event.type === 'round:review:category') setScreen('resultado');
       if (event.type === 'game:final_results') setScreen('pódio');
 
+      if (
+        event.type === 'error' &&
+        event.requestId &&
+        event.requestId === pendingRoomRequestIdRef.current
+      ) {
+        pendingCommandRef.current = null;
+        pendingRoomRequestIdRef.current = null;
+        setRoomCode(null);
+        setIsRoomPending(false);
+        setEntryError(`${event.code}: ${event.message}`);
+      }
+
       // Fire pending command once connected
-      if ((event as { type: string }).type === 'session:ready' && pendingCommandRef.current) {
+      if (
+        event.type === 'session:ready' &&
+        event.negotiatedProtocolVersion === 1 &&
+        pendingCommandRef.current
+      ) {
         pendingCommandRef.current();
         pendingCommandRef.current = null;
       }
@@ -78,20 +100,38 @@ export default function App() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  function handleCreateRoom(nickname: string) {
-    // Server assigns the room code; we connect to a random room name, then send room:create
-    const tempCode = crypto.randomUUID().slice(0, 8).toUpperCase();
-    setRoomCode(tempCode);
-    pendingCommandRef.current = () =>
-      send({ type: 'room:create', requestId: crypto.randomUUID(), nickname });
-    setScreen('configuração');
+  async function handleCreateRoom(nickname: string) {
+    setEntryError(null);
+    setIsRoomPending(true);
+    try {
+      const response = await fetch('/rooms', { method: 'POST' });
+      const result = (await response.json()) as { code?: string; error?: string; message?: string };
+      if (!response.ok || !result.code) {
+        throw new Error(result.message ?? result.error ?? 'Não foi possível alocar uma sala.');
+      }
+
+      const requestId = crypto.randomUUID();
+      pendingRoomRequestIdRef.current = requestId;
+      pendingCommandRef.current = () =>
+        send({ type: 'room:create', requestId, nickname });
+      setRoomCode(result.code);
+    } catch (error) {
+      setIsRoomPending(false);
+      setEntryError(
+        error instanceof Error ? error.message : 'Falha inesperada ao criar a sala.',
+      );
+    }
   }
 
   function handleJoinRoom(nickname: string, code: string) {
-    setRoomCode(code);
+    const canonicalCode = code.trim().toUpperCase();
+    const requestId = crypto.randomUUID();
+    setEntryError(null);
+    setIsRoomPending(true);
+    pendingRoomRequestIdRef.current = requestId;
     pendingCommandRef.current = () =>
-      send({ type: 'room:join', requestId: crypto.randomUUID(), code, nickname });
-    setScreen('configuração');
+      send({ type: 'room:join', requestId, code: canonicalCode, nickname });
+    setRoomCode(canonicalCode);
   }
 
   function handleUpdateCategories(categories: string[]) {
@@ -190,7 +230,12 @@ export default function App() {
       )}
 
       {screen === 'início' && (
-        <EntryScreen onEnterRoom={handleJoinRoom} onCreateRoom={handleCreateRoom} />
+        <EntryScreen
+          onEnterRoom={handleJoinRoom}
+          onCreateRoom={handleCreateRoom}
+          error={entryError}
+          isLoading={isRoomPending}
+        />
       )}
 
       {screen === 'configuração' && (
