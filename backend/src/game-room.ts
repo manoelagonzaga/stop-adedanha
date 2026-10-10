@@ -461,23 +461,23 @@ export class GameRoom implements DurableObject {
       requestedCode !== this.room.code ||
       cmd.code.trim().toUpperCase() !== this.room.code
     ) {
-      this.sendError(socket, 'ROOM_NOT_FOUND', 'Room does not exist', cmd.requestId);
+      this.sendError(socket, 'ROOM_NOT_FOUND', 'A sala informada não existe', cmd.requestId);
       return;
     }
     if (this.room.phase !== 'CONFIGURING') {
-      this.sendError(socket, 'INVALID_PHASE', 'Room is not accepting new players', cmd.requestId);
+      this.sendError(socket, 'INVALID_PHASE', 'Esta sala não está aceitando novos jogadores', cmd.requestId);
       return;
     }
 
     const nickname = cmd.nickname.trim();
 
     if (!this.isValidNickname(nickname)) {
-      this.sendError(socket, 'INVALID_NICKNAME', 'Nickname must contain 1 to 24 characters', cmd.requestId);
+      this.sendError(socket, 'INVALID_NICKNAME', 'O apelido deve conter de 1 a 24 caracteres', cmd.requestId);
       return;
     }
 
     if (this.room.players.filter((player) => player.status === 'active').length >= MAX_PLAYERS) {
-      this.sendError(socket, 'ROOM_FULL', 'Room is full', cmd.requestId);
+      this.sendError(socket, 'ROOM_FULL', 'A sala está completa', cmd.requestId);
       return;
     }
 
@@ -486,7 +486,7 @@ export class GameRoom implements DurableObject {
         (p) => p.nickname.toLowerCase() === nickname.toLowerCase() && p.status === 'active'
       )
     ) {
-      this.sendError(socket, 'DUPLICATE_NICKNAME', 'Nickname already in use', cmd.requestId);
+      this.sendError(socket, 'DUPLICATE_NICKNAME', 'O apelido já está em uso', cmd.requestId);
       return;
     }
 
@@ -528,7 +528,7 @@ export class GameRoom implements DurableObject {
     cmd: Extract<ClientCommand, { type: 'session:resume' }>,
   ): Promise<void> {
     if (!cmd.resumeToken || cmd.resumeToken.length > 256) {
-      this.sendError(socket, 'SESSION_INVALID', 'This room session is invalid or expired', cmd.requestId);
+      this.sendError(socket, 'SESSION_INVALID', 'A sessão informada é inválida ou expirada', cmd.requestId);
       return;
     }
 
@@ -544,7 +544,7 @@ export class GameRoom implements DurableObject {
     if (!credential || !player) {
       const remaining = credentials.filter((entry) => entry.expiresAt > now);
       await this.state.storage.put('resumeCredentials', remaining);
-      this.sendError(socket, 'SESSION_INVALID', 'This room session is invalid or expired', cmd.requestId);
+      this.sendError(socket, 'SESSION_INVALID', 'A sessão informada é inválida ou expirada', cmd.requestId);
       return;
     }
 
@@ -554,7 +554,7 @@ export class GameRoom implements DurableObject {
         this.sessionRoomCodes.delete(existingSocket);
         this.negotiatedSockets.delete(existingSocket);
         try {
-          existingSocket.close(1000, 'Session resumed on another connection');
+          existingSocket.close(1000, 'Sessão pausada em outra conexão');
         } catch (error) {
           console.error('[GameRoom] Failed to close replaced session:', error);
         }
@@ -685,7 +685,7 @@ export class GameRoom implements DurableObject {
       this.sendError(
         socket,
         'INVALID_CONFIGURATION',
-        'Choose 1 to 20 unique category names, each 1 to 40 characters long',
+        'Escolha 1 a 20 nomes de categoria únicos, cada um com 1 a 40 caracteres',
         cmd.requestId,
       );
       return;
@@ -712,7 +712,7 @@ export class GameRoom implements DurableObject {
       this.sendError(
         socket,
         'INVALID_CONFIGURATION',
-        'Round count must be an integer from 1 to 20',
+        'A quantidade de rodadas deve ser um número inteiro de 1 a 20',
         cmd.requestId,
       );
       return;
@@ -737,7 +737,7 @@ export class GameRoom implements DurableObject {
       this.sendError(
         socket,
         'INVALID_CONFIGURATION',
-        'Choose a duration of 0, 60, 90, or 120 seconds and at least one unique letter from A to Z',
+        'Escolha uma duração de 0, 60, 90 ou 120 segundos e pelo menos uma letra única de A a Z',
         cmd.requestId,
       );
       return;
@@ -757,17 +757,17 @@ export class GameRoom implements DurableObject {
     cmd: Extract<ClientCommand, { type: 'game:start' }>,
   ): Promise<void> {
     if (!this.isHost(playerId)) {
-      this.sendError(socket, 'NOT_HOST', 'Only the host can start the game', cmd.requestId);
+      this.sendError(socket, 'NOT_HOST', 'Apenas o anfitrião pode iniciar o jogo', cmd.requestId);
       return;
     }
 
     if (this.room.phase !== 'CONFIGURING') {
-      this.sendError(socket, 'INVALID_PHASE', 'The game can only start during configuration', cmd.requestId);
+      this.sendError(socket, 'INVALID_PHASE', 'O jogo só pode ser iniciado durante a configuração', cmd.requestId);
       return;
     }
 
     if (this.room.players.filter((player) => player.status === 'active').length < 2) {
-      this.sendError(socket, 'NOT_ENOUGH_PLAYERS', 'At least two active players are required', cmd.requestId);
+      this.sendError(socket, 'NOT_ENOUGH_PLAYERS', 'São necessários pelo menos dois jogadores ativos', cmd.requestId);
       return;
     }
 
@@ -779,7 +779,7 @@ export class GameRoom implements DurableObject {
       !this.isValidRoundDuration(this.room.roundDurationSeconds) ||
       !this.validateAllowedLetters(this.room.allowedLetters)
     ) {
-      this.sendError(socket, 'INVALID_CONFIGURATION', 'Room settings are not valid', cmd.requestId);
+      this.sendError(socket, 'INVALID_CONFIGURATION', 'As configurações da sala não são válidas', cmd.requestId);
       return;
     }
 
@@ -800,7 +800,7 @@ export class GameRoom implements DurableObject {
     const roundId = `round-${nextRound}`;
     const duration = this.room.roundDurationSeconds;
     if (!this.isValidRoundDuration(duration)) {
-      throw new Error('Room has no valid round duration configuration');
+      throw new Error('A sala não tem uma configuração de duração de rodada válida');
     }
     const deadline = duration === 0 ? undefined : Date.now() + duration * 1000;
 
@@ -857,7 +857,7 @@ export class GameRoom implements DurableObject {
     const roundData = this.currentRoundData;
     const player = this.room.players.find((entry) => entry.id === playerId);
     if (!player || player.status !== 'active') {
-      this.sendError(socket, 'INVALID_ANSWER', 'Only active players can submit answers', cmd.requestId);
+      this.sendError(socket, 'INVALID_ANSWER', 'Apenas jogadores ativos podem enviar respostas', cmd.requestId);
       return;
     }
     if (
@@ -866,12 +866,12 @@ export class GameRoom implements DurableObject {
       cmd.roundId !== roundData.id ||
       this.room.currentRoundId !== roundData.id
     ) {
-      this.sendError(socket, 'ROUND_CLOSED', 'This round is no longer accepting answers', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'Esta rodada não está mais aceitando respostas', cmd.requestId);
       return;
     }
     if (this.room.roundDeadline !== undefined && Date.now() >= this.room.roundDeadline) {
       await this.beginCategoryReview(roundData);
-      this.sendError(socket, 'ROUND_CLOSED', 'The round deadline has passed', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'O prazo da rodada expirou', cmd.requestId);
       return;
     }
     if (
@@ -884,7 +884,7 @@ export class GameRoom implements DurableObject {
           typeof value !== 'string',
       )
     ) {
-      this.sendError(socket, 'INVALID_ANSWER', 'Answers must contain only known categories and text values', cmd.requestId);
+      this.sendError(socket, 'INVALID_ANSWER', 'As respostas devem conter apenas categorias conhecidas e valores de texto', cmd.requestId);
       return;
     }
 
@@ -915,7 +915,7 @@ export class GameRoom implements DurableObject {
     const roundData = this.currentRoundData;
     const player = this.room.players.find((entry) => entry.id === playerId);
     if (!player || player.status !== 'active') {
-      this.sendError(socket, 'INVALID_PHASE', 'Only active players can stop the round', cmd.requestId);
+      this.sendError(socket, 'INVALID_PHASE', 'Apenas jogadores ativos podem parar a rodada', cmd.requestId);
       return;
     }
     if (
@@ -924,12 +924,12 @@ export class GameRoom implements DurableObject {
       cmd.roundId !== roundData.id ||
       this.room.currentRoundId !== roundData.id
     ) {
-      this.sendError(socket, 'ROUND_CLOSED', 'This round is already closed', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'Esta rodada já está fechada', cmd.requestId);
       return;
     }
     if (this.room.roundDeadline !== undefined && Date.now() >= this.room.roundDeadline) {
       await this.beginCategoryReview(roundData);
-      this.sendError(socket, 'ROUND_CLOSED', 'The round deadline has passed', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'O prazo da rodada expirou', cmd.requestId);
       return;
     }
 
@@ -1027,7 +1027,7 @@ export class GameRoom implements DurableObject {
   ): Promise<void> {
     const player = this.room.players.find((entry) => entry.id === playerId);
     if (!player || player.status !== 'active') {
-      this.sendError(socket, 'NOT_ELIGIBLE', 'Only active room players may vote', cmd.requestId);
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Apenas jogadores ativos podem votar', cmd.requestId);
       return;
     }
 
@@ -1038,7 +1038,7 @@ export class GameRoom implements DurableObject {
       cmd.roundId !== roundData.id ||
       this.room.currentRoundId !== roundData.id
     ) {
-      this.sendError(socket, 'ROUND_CLOSED', 'This round is not accepting votes', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'Esta rodada não está aceitando votos', cmd.requestId);
       return;
     }
     if (this.room.reviewDeadline !== undefined && Date.now() >= this.room.reviewDeadline) {
@@ -1046,37 +1046,37 @@ export class GameRoom implements DurableObject {
         roundData,
         this.room.currentReviewCategoryIndex ?? 0,
       );
-      this.sendError(socket, 'ROUND_CLOSED', 'The active category deadline has passed', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'O prazo da categoria ativa expirou', cmd.requestId);
       return;
     }
 
     const currentCategory = this.room.categories[this.room.currentReviewCategoryIndex ?? -1];
     if (!currentCategory || cmd.categoryId !== currentCategory.id) {
-      this.sendError(socket, 'INVALID_VOTE', 'Votes are accepted only for the active category', cmd.requestId);
+      this.sendError(socket, 'INVALID_VOTE', 'Os votos são aceitos apenas para a categoria ativa', cmd.requestId);
       return;
     }
     if (cmd.decision !== 'valid' && cmd.decision !== 'invalidate') {
-      this.sendError(socket, 'INVALID_VOTE', 'Vote decision must be valid or invalidate', cmd.requestId);
+      this.sendError(socket, 'INVALID_VOTE', 'A decisão do voto deve ser válida ou invalidar', cmd.requestId);
       return;
     }
     if (!roundData.eligibleVoterIds.includes(playerId)) {
-      this.sendError(socket, 'NOT_ELIGIBLE', 'This player is not eligible to vote in this review', cmd.requestId);
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Este jogador não é elegível para votar nesta revisão', cmd.requestId);
       return;
     }
 
     const answer = roundData.answers.get(`${cmd.answerPlayerId}:${cmd.categoryId}`);
     if (!answer || !answer.isValid || !answer.value.trim()) {
-      this.sendError(socket, 'INVALID_VOTE', 'The target answer is not eligible for voting', cmd.requestId);
+      this.sendError(socket, 'INVALID_VOTE', 'A resposta alvo não é elegível para votação', cmd.requestId);
       return;
     }
     if (answer.playerId === playerId) {
-      this.sendError(socket, 'SELF_VOTE', 'Players cannot vote on their own answers', cmd.requestId);
+      this.sendError(socket, 'SELF_VOTE', 'O jogador não pode votar em suas próprias respostas', cmd.requestId);
       return;
     }
 
     const eligibleVoters = roundData.eligibleVoterIds.filter((voterId) => voterId !== answer.playerId);
     if (!eligibleVoters.includes(playerId)) {
-      this.sendError(socket, 'NOT_ELIGIBLE', 'The answer author is excluded from its eligible voters', cmd.requestId);
+      this.sendError(socket, 'NOT_ELIGIBLE', 'O autor da resposta está excluído de seus eleitores elegíveis', cmd.requestId);
       return;
     }
 
@@ -1104,11 +1104,11 @@ export class GameRoom implements DurableObject {
   ): Promise<void> {
     const player = this.room.players.find((entry) => entry.id === playerId);
     if (!player || player.status !== 'active') {
-      this.sendError(socket, 'NOT_ELIGIBLE', 'Only active room players may advance the round', cmd.requestId);
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Apenas jogadores ativos podem avançar a rodada', cmd.requestId);
       return;
     }
     if (!this.isHost(playerId)) {
-      this.sendError(socket, 'NOT_HOST', 'Only the host can advance to the next round', cmd.requestId);
+      this.sendError(socket, 'NOT_HOST', 'Apenas o anfitrião pode avançar para a próxima rodada', cmd.requestId);
       return;
     }
     if (
@@ -1116,7 +1116,7 @@ export class GameRoom implements DurableObject {
       cmd.roundId !== this.room.currentRoundId ||
       this.room.currentRound >= this.room.totalRounds
     ) {
-      this.sendError(socket, 'ROUND_CLOSED', 'This round cannot be advanced', cmd.requestId);
+      this.sendError(socket, 'ROUND_CLOSED', 'Esta rodada não pode ser avançada', cmd.requestId);
       return;
     }
 
@@ -1405,11 +1405,11 @@ export class GameRoom implements DurableObject {
 
   private validateLobbyMutation(socket: WebSocket, playerId: string, requestId: string): boolean {
     if (!this.isHost(playerId)) {
-      this.sendError(socket, 'NOT_HOST', 'Only the host can update room settings', requestId);
+      this.sendError(socket, 'NOT_HOST', 'Apenas o anfitrião pode atualizar as configurações da sala', requestId);
       return false;
     }
     if (this.room.phase !== 'CONFIGURING') {
-      this.sendError(socket, 'INVALID_PHASE', 'Room settings can only change during configuration', requestId);
+      this.sendError(socket, 'INVALID_PHASE', 'As configurações da sala só podem ser alteradas durante a configuração', requestId);
       return false;
     }
     return true;
@@ -1429,12 +1429,12 @@ export class GameRoom implements DurableObject {
 
     const player = this.room.players.find((entry) => entry.id === playerId);
     if (!player || player.status !== 'active') {
-      this.sendError(socket, 'NOT_ELIGIBLE', 'An active room membership is required for this action', cmd.requestId);
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Um membro ativo da sala é necessário para esta ação', cmd.requestId);
       return false;
     }
 
     if (HOST_ONLY_COMMANDS.has(cmd.type) && !player.isHost) {
-      this.sendError(socket, 'NOT_HOST', 'Only the active host can perform this action', cmd.requestId);
+      this.sendError(socket, 'NOT_HOST', 'Apenas o anfitrião ativo pode realizar esta ação', cmd.requestId);
       return false;
     }
 
@@ -1445,7 +1445,7 @@ export class GameRoom implements DurableObject {
         cmd.type === 'round:next'
         ? 'ROUND_CLOSED'
         : 'INVALID_PHASE';
-      this.sendError(socket, code, 'This action is not allowed during the current game phase', cmd.requestId);
+      this.sendError(socket, code, 'Esta ação não é permitida durante a fase atual do jogo', cmd.requestId);
       return false;
     }
     return true;
@@ -1600,7 +1600,7 @@ export class GameRoom implements DurableObject {
 
   private pickLetter(): string {
     const letters = this.validateAllowedLetters(this.room.allowedLetters);
-    if (!letters) throw new Error('Room has no valid allowed-letter configuration');
+    if (!letters) throw new Error('A sala não tem uma configuração válida de letras permitidass');
     return letters[Math.floor(Math.random() * letters.length)];
   }
 }
