@@ -45,9 +45,9 @@ export function LobbyScreen({
   const hasActiveHost = room.players.some((player) => player.isHost && player.status === 'active');
 
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [selectedPack, setSelectedPack] = useState<'classico' | 'geek' | 'expert' | null>(null);
 
   const categoryNames = room.categories.map((c: Category) => c.name);
-  let selectedPack = '';
   const roundTime = room.roundDurationSeconds ?? 60;
   const allowedLetters = room.allowedLetters ?? ALL_LETTERS;
   const excludedLetters = ALL_LETTERS.filter((letter) => !allowedLetters.includes(letter));
@@ -75,7 +75,7 @@ export function LobbyScreen({
 
   function handleLoadPack(packName: keyof typeof CATEGORY_PACKS) {
     if (!canEditLobby) return;
-    selectedPack = packName;
+    setSelectedPack(packName);
     const pack = CATEGORY_PACKS[packName];
     onUpdateCategories(pack);
   }
@@ -317,7 +317,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'classico'}
                   onClick={() => handleLoadPack('classico')}
-                  className="rounded-lg bg-indigo-50 px-2.5 py-1 font-bold text-indigo-700 transition hover:bg-indigo-100"
+                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'classico' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
                 >
                   Clássico
                 </button>
@@ -325,7 +325,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'geek'}
                   onClick={() => handleLoadPack('geek')}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-700 transition hover:bg-slate-200"
+                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'geek' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                 >
                   Geek/Pop
                 </button>
@@ -333,7 +333,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'expert'}
                   onClick={() => handleLoadPack('expert')}
-                  className="rounded-lg bg-rose-50 px-2.5 py-1 font-bold text-rose-700 transition hover:bg-rose-100"
+                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'expert' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}
                 >
                   Expert 🌶️
                 </button>

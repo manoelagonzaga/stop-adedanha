@@ -22,6 +22,9 @@ type LobbyActionStatus = {
   message?: string;
 };
 
+/** Track which entry card triggered the pending connection */
+type PendingAction = 'create' | 'join' | null;
+
 function createEmptyGameState(): GameState {
   return {
     room: null,
@@ -40,11 +43,21 @@ export default function App() {
   const [commandError, setCommandError] = useState<string | null>(null);
   const [lobbyActionStatus, setLobbyActionStatus] = useState<LobbyActionStatus | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
-  const [isRoomPending, setIsRoomPending] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const pendingCommandRef = useRef<(() => void) | null>(null);
   const pendingRoomRequestIdRef = useRef<string | null>(null);
   const lobbyPendingRequestIds = useRef(new Map<string, ClientCommand['type']>());
   const lobbyRequestTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  // Snapshot of the previous room settings for "Play Again" reuse
+  const prevRoomSettingsRef = useRef<{
+    nickname: string;
+    avatar: Avatar;
+    categories: string[];
+    totalRounds: number;
+    roundDurationSeconds: 0 | 60 | 90 | 120;
+    allowedLetters: string[];
+  } | null>(null);
 
   useEffect(() => () => {
     for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
@@ -79,7 +92,7 @@ export default function App() {
       if (event.type === 'room:state') {
         pendingRoomRequestIdRef.current = null;
         setEntryError(null);
-        setIsRoomPending(false);
+        setPendingAction(null);
         setReconnectError(null);
         const phase = event.state.phase;
         if (phase === 'ROUND_ACTIVE') settleStartCommand();
@@ -97,7 +110,7 @@ export default function App() {
       if (event.type === 'session:resumed') setReconnectError(null);
       if (event.type === 'room:joined' || event.type === 'session:resumed') {
         pendingRoomRequestIdRef.current = null;
-        setIsRoomPending(false);
+        setPendingAction(null);
         setEntryError(null);
       }
       if (event.type === 'error' && event.code === 'SESSION_INVALID') {
@@ -121,18 +134,19 @@ export default function App() {
         const timeout = lobbyRequestTimeouts.current.get(event.requestId!);
         if (timeout) clearTimeout(timeout);
         lobbyRequestTimeouts.current.delete(event.requestId!);
-        setLobbyActionStatus({ status: 'rejected', message: event.message });
+        setLobbyActionStatus({
+          status: 'rejected',
+          message: event.message,
+        });
       }
-
       if (
         event.type === 'error' &&
-        event.requestId &&
         event.requestId === pendingRoomRequestIdRef.current
       ) {
         pendingCommandRef.current = null;
         pendingRoomRequestIdRef.current = null;
         setRoomCode(null);
-        setIsRoomPending(false);
+        setPendingAction(null);
         setEntryError(event.message);
         return;
       }
@@ -147,7 +161,7 @@ export default function App() {
 
       if (event.type === 'command:ack' && event.requestId === pendingRoomRequestIdRef.current) {
         pendingRoomRequestIdRef.current = null;
-        setIsRoomPending(false);
+        setPendingAction(null);
       }
 
       // Fire pending command once connected
@@ -211,7 +225,7 @@ export default function App() {
   async function handleCreateRoom(nickname: string, avatar: Avatar) {
     setEntryError(null);
     setReconnectError(null);
-    setIsRoomPending(true);
+    setPendingAction('create');
     try {
       const response = await fetch(getRoomsApiUrl(backendBaseUrl), { method: 'POST' });
       const result = (await response.json()) as { code?: string; error?: string; message?: string };
@@ -222,33 +236,27 @@ export default function App() {
       const requestId = crypto.randomUUID();
       pendingRoomRequestIdRef.current = requestId;
       pendingCommandRef.current = () => {
-        const sent = send({
+        const cmd: ClientCommand = {
           type: 'room:create',
           requestId,
           nickname,
           avatar,
           roundDurationSeconds: 60,
           allowedLetters: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
-        });
+        };
+        const sent = send(cmd);
         if (sent) {
-          trackCommand({
-            type: 'room:create',
-            requestId,
-            nickname,
-            avatar,
-            roundDurationSeconds: 60,
-            allowedLetters: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
-          });
+          trackCommand(cmd);
         } else {
           pendingRoomRequestIdRef.current = null;
           setRoomCode(null);
-          setIsRoomPending(false);
+          setPendingAction(null);
           setEntryError('Não foi possível enviar a criação da sala. Verifique sua conexão e tente novamente.');
         }
       };
       setRoomCode(result.code);
     } catch (error) {
-      setIsRoomPending(false);
+      setPendingAction(null);
       setEntryError(
         error instanceof Error ? error.message : 'Falha inesperada ao criar a sala.',
       );
@@ -261,7 +269,7 @@ export default function App() {
     const requestId = crypto.randomUUID();
     setEntryError(null);
     setReconnectError(null);
-    setIsRoomPending(true);
+    setPendingAction('join');
     pendingRoomRequestIdRef.current = requestId;
     pendingCommandRef.current = () => {
       const command: ClientCommand = {
@@ -276,7 +284,7 @@ export default function App() {
       } else {
         pendingRoomRequestIdRef.current = null;
         setRoomCode(null);
-        setIsRoomPending(false);
+        setPendingAction(null);
         setEntryError('Não foi possível enviar o ingresso na sala. Verifique sua conexão e tente novamente.');
       }
     };
@@ -304,6 +312,18 @@ export default function App() {
   }
 
   function handleStartGame() {
+    // Snapshot room settings before game starts so "Play Again" can reuse them
+    if (state.room) {
+      const me = state.room.players.find((p) => p.id === state.myPlayerId);
+      prevRoomSettingsRef.current = {
+        nickname: me?.nickname ?? '',
+        avatar: me?.avatar ?? '🦊',
+        categories: state.room.categories.map((c) => c.name),
+        totalRounds: state.room.totalRounds,
+        roundDurationSeconds: state.room.roundDurationSeconds ?? 60,
+        allowedLetters: state.room.allowedLetters ?? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
+      };
+    }
     sendLobbyCommand({ type: 'game:start', requestId: crypto.randomUUID() });
   }
 
@@ -319,6 +339,15 @@ export default function App() {
     if (!room?.currentRoundId) return;
     sendCommand({
       type: 'round:next',
+      requestId: crypto.randomUUID(),
+      roundId: room.currentRoundId,
+    });
+  }
+
+  function handleNextCategory() {
+    if (!room?.currentRoundId) return;
+    sendCommand({
+      type: 'round:review:next',
       requestId: crypto.randomUUID(),
       roundId: room.currentRoundId,
     });
@@ -340,11 +369,13 @@ export default function App() {
     });
   }
 
-  function handlePlayAgain() {
+  /** Reset everything and return to home screen */
+  function handleBackToHome() {
     setRoomCode(null);
     setReconnectError(null);
     setCommandError(null);
     setLobbyActionStatus(null);
+    setPendingAction(null);
     pendingCommandRef.current = null;
     pendingRoomRequestIdRef.current = null;
     lobbyPendingRequestIds.current.clear();
@@ -354,10 +385,108 @@ export default function App() {
     setScreen('início');
   }
 
+  /** Create a new room keeping previous nickname/avatar and replicating room settings */
+  async function handlePlayAgain() {
+    const prev = prevRoomSettingsRef.current;
+
+    // If we have no previous settings, just go home
+    if (!prev) {
+      handleBackToHome();
+      return;
+    }
+
+    // Snapshot before resetting state
+    const { nickname, avatar, categories, totalRounds, roundDurationSeconds, allowedLetters } = prev;
+
+    // Reset UI state first
+    setRoomCode(null);
+    setReconnectError(null);
+    setCommandError(null);
+    setLobbyActionStatus(null);
+    setPendingAction('create');
+    pendingCommandRef.current = null;
+    pendingRoomRequestIdRef.current = null;
+    lobbyPendingRequestIds.current.clear();
+    for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
+    lobbyRequestTimeouts.current.clear();
+    setState(createEmptyGameState());
+
+    try {
+      const response = await fetch(getRoomsApiUrl(backendBaseUrl), { method: 'POST' });
+      const result = (await response.json()) as { code?: string; error?: string; message?: string };
+      if (!response.ok || !result.code) {
+        throw new Error(result.message ?? result.error ?? 'Não foi possível criar a nova sala.');
+      }
+
+      const requestId = crypto.randomUUID();
+      pendingRoomRequestIdRef.current = requestId;
+      pendingCommandRef.current = () => {
+        const cmd: ClientCommand = {
+          type: 'room:create',
+          requestId,
+          nickname,
+          avatar,
+          totalRounds,
+          roundDurationSeconds,
+          allowedLetters,
+        };
+        const sent = send(cmd);
+        if (sent) {
+          trackCommand(cmd);
+          // After room is created, replicate the categories
+          // The server will respond with room:state -> we'll then push categories
+          // We store a pending category update to be applied once lobby opens
+          pendingCategoryUpdateRef.current = categories;
+        } else {
+          pendingRoomRequestIdRef.current = null;
+          setRoomCode(null);
+          setPendingAction(null);
+          setEntryError('Não foi possível enviar a criação da sala. Verifique sua conexão.');
+        }
+      };
+      setRoomCode(result.code);
+    } catch (error) {
+      setPendingAction(null);
+      setScreen('início');
+      setEntryError(
+        error instanceof Error ? error.message : 'Falha inesperada ao criar nova sala.',
+      );
+    }
+  }
+
+  // Ref to apply pending category update after "Play Again" lands in lobby
+  const pendingCategoryUpdateRef = useRef<string[] | null>(null);
+
+  useEffect(() => {
+    if (screen === 'configuração' && pendingCategoryUpdateRef.current) {
+      const cats = pendingCategoryUpdateRef.current;
+      pendingCategoryUpdateRef.current = null;
+      // Apply the category replication from previous session
+      handleUpdateCategories(cats);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
+
   // ── Resolve display values ────────────────────────────────────────────────
 
   const room: RoomState | null = state.room;
   const myPlayerId = state.myPlayerId ?? '';
+
+  useEffect(() => {
+    if (room && myPlayerId) {
+      const me = room.players.find((p) => p.id === myPlayerId);
+      if (me) {
+        prevRoomSettingsRef.current = {
+          nickname: me.nickname,
+          avatar: me.avatar,
+          categories: room.categories.map((c) => c.name),
+          totalRounds: room.totalRounds,
+          roundDurationSeconds: room.roundDurationSeconds ?? 60,
+          allowedLetters: room.allowedLetters ?? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
+        };
+      }
+    }
+  }, [room, myPlayerId]);
 
   useEffect(() => {
     if (screen === 'início') return;
@@ -415,17 +544,7 @@ export default function App() {
             type="button"
             onClick={() => {
               if (roomCode) clearResumeToken(roomCode);
-              setRoomCode(null);
-              setReconnectError(null);
-              setCommandError(null);
-              setLobbyActionStatus(null);
-              pendingCommandRef.current = null;
-              pendingRoomRequestIdRef.current = null;
-              lobbyPendingRequestIds.current.clear();
-              for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
-              lobbyRequestTimeouts.current.clear();
-              setState(createEmptyGameState());
-              setScreen('início');
+              handleBackToHome();
             }}
             className="shrink-0 rounded-lg bg-amber-900 px-3 py-2 text-white"
           >
@@ -457,7 +576,7 @@ export default function App() {
           onEnterRoom={handleJoinRoom}
           onCreateRoom={handleCreateRoom}
           error={entryError}
-          isLoading={isRoomPending}
+          pendingAction={pendingAction}
           initialRoomCode={invitedRoomCode}
         />
       )}
@@ -490,6 +609,7 @@ export default function App() {
           answers={state.answers}
           onVote={handleVote}
           onNextRound={handleNextRound}
+          onNextCategory={handleNextCategory}
         />
       )}
 
@@ -498,7 +618,7 @@ export default function App() {
           results={state.finalResults}
           myPlayerId={myPlayerId}
           onPlayAgain={handlePlayAgain}
-          onBackToHome={handlePlayAgain}
+          onBackToHome={handleBackToHome}
         />
       )}
     </>

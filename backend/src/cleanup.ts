@@ -1,4 +1,4 @@
-export const SYSTEM_REGISTRY_ROOM_NAME = '__system_registry__';
+const SYSTEM_REGISTRY_ROOM_NAME = '__system_registry__';
 
 export const LEGACY_ROOM_IDS: readonly string[] = [
   'J8FGR9',

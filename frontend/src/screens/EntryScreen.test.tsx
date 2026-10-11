@@ -85,21 +85,45 @@ describe('EntryScreen room join feedback', () => {
     expect(onEnterRoom).toHaveBeenCalledWith('Guest', 'ABC234', '🐼');
   });
 
-  it('shows the pending connection state and disables duplicate room actions', () => {
+  it('shows the pending connection state and exclusively disables the create room action when pendingAction is "create"', () => {
     render(
       <ToastProvider>
         <EntryScreen
           onEnterRoom={vi.fn()}
           onCreateRoom={vi.fn()}
-          isLoading
+          pendingAction="create"
         />
       </ToastProvider>,
     );
 
     expect(screen.getByText('Conectando à sala e aguardando confirmação do servidor...'))
       .toHaveAttribute('role', 'status');
-    const actionButtons = screen.getAllByRole('button', { name: /Conectando à sala/ });
-    expect(actionButtons).toHaveLength(2);
-    actionButtons.forEach((button) => expect(button).toBeDisabled());
+
+    const createBtn = screen.getByRole('button', { name: /Conectando à sala.../ });
+    expect(createBtn).toBeDisabled();
+
+    const joinBtn = screen.getByRole('button', { name: /Entrar no Jogo Agora/ });
+    expect(joinBtn).not.toBeDisabled();
+  });
+
+  it('shows the pending connection state and exclusively disables the join room action when pendingAction is "join"', () => {
+    render(
+      <ToastProvider>
+        <EntryScreen
+          onEnterRoom={vi.fn()}
+          onCreateRoom={vi.fn()}
+          pendingAction="join"
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByText('Conectando à sala e aguardando confirmação do servidor...'))
+      .toHaveAttribute('role', 'status');
+
+    const createBtn = screen.getByRole('button', { name: /Criar Sala e Convidar Amigos/ });
+    expect(createBtn).not.toBeDisabled();
+
+    const joinBtn = screen.getByRole('button', { name: /Conectando à sala.../ });
+    expect(joinBtn).toBeDisabled();
   });
 });
