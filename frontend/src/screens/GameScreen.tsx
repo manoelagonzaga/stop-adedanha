@@ -105,13 +105,11 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
         </div>
 
         {/* Cronômetro Decrescente */}
-        <div className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${
-          timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
-        }`}>
+        <div className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
+          }`}>
           <div className="relative flex h-10 w-10 items-center justify-center">
-            <span className={`material-symbols-outlined text-2xl ${
-              timeLeft !== null && timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
-            }`}>
+            <span aria-hidden="true" className={`material-symbols-outlined text-2xl ${timeLeft !== null && timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
+              }`}>
               timelapse
             </span>
           </div>
@@ -119,9 +117,8 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Tempo Restante
             </span>
-            <span className={`text-2xl font-black tracking-tight ${
-              timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
-            }`}>
+            <span className={`text-2xl font-black tracking-tight ${timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
+              }`}>
               {timeLeft === null ? 'Sem limite' : `${minutes}:${seconds}`}
             </span>
           </div>
@@ -138,7 +135,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
               Preencha com a Letra{' '}
               <span className="font-black text-xl text-indigo-600">{currentLetter}</span>
             </h2>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+            <span aria-hidden="true" className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
               {filledCount} de {totalCategories} Preenchidas
             </span>
           </div>
@@ -153,38 +150,37 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
               return (
                 <div
                   key={cat.id}
-                  className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${
-                    isFilled
+                  className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${isFilled
                       ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
                       : 'border-indigo-100 bg-white hover:border-slate-300'
-                  } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
+                    } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
                 >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
+                  <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
                     {index + 1}
                   </span>
-                  <span className="w-28 shrink-0 truncate text-sm font-bold text-slate-800">
+                  <span aria-hidden="true" className="w-28 shrink-0 truncate text-sm font-bold text-slate-800">
                     {cat.name}
                   </span>
                   <input
                     type="text"
                     value={val}
                     onChange={(e) => handleInputChange(cat.id, e.target.value)}
-                    placeholder={`Ex com ${currentLetter}...`}
+                    placeholder={`${cat.name} com a letra ${currentLetter}...`}
                     disabled={isStopped}
                     autoComplete="off"
                     className="game-field flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300"
                   />
                   {isFilled ? (
                     <span
-                      className={`material-symbols-outlined text-lg ${
-                        startsWithLetter ? 'text-emerald-500' : 'text-amber-500'
-                      }`}
+                      aria-hidden="true"
+                      className={`material-symbols-outlined text-lg ${startsWithLetter ? 'text-emerald-500' : 'text-amber-500'
+                        }`}
                       title={startsWithLetter ? 'Inicia com a letra sorteada' : 'Atenção: não inicia com a letra sorteada'}
                     >
                       check_circle
                     </span>
                   ) : (
-                    <span className="text-xs font-bold text-slate-300">TAB ⇥</span>
+                    <span aria-hidden="true" className="text-xs font-bold text-slate-300">TAB ⇥</span>
                   )}
                 </div>
               );
@@ -255,11 +251,10 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                 return (
                   <div
                     key={player.id}
-                    className={`rounded-xl p-3 transition ${
-                      isMe
+                    className={`rounded-xl p-3 transition ${isMe
                         ? 'border border-indigo-200 bg-indigo-50/70'
                         : 'border border-slate-100 bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between text-xs font-bold">
                       <div className="flex items-center gap-2">
@@ -276,9 +271,8 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                     {/* Barra de progresso do preenchimento */}
                     <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          isMe ? 'bg-indigo-600' : index === 0 ? 'bg-amber-500' : 'bg-slate-400'
-                        }`}
+                        className={`h-full rounded-full transition-all duration-300 ${isMe ? 'bg-indigo-600' : index === 0 ? 'bg-amber-500' : 'bg-slate-400'
+                          }`}
                         style={{ width: `${playerProgress}%` }}
                       />
                     </div>

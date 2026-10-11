@@ -5,7 +5,7 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType>({
-  showToast: () => {},
+  showToast: () => { },
 });
 
 export function useToast() {
@@ -33,13 +33,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div
         role="status"
         aria-live="polite"
-        className={`fixed top-20 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-2xl transition-all duration-300 ${
-          toast.visible
+        className={`fixed top-20 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-2xl transition-all duration-300 ${toast.visible
             ? 'opacity-100 translate-y-0'
             : 'opacity-0 pointer-events-none translate-y-2'
-        }`}
+          }`}
       >
-        <span className="material-symbols-outlined text-base text-emerald-400">check_circle</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-base text-emerald-400">check_circle</span>
         <span>{toast.message}</span>
       </div>
     </ToastContext.Provider>
