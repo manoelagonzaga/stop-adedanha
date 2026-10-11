@@ -121,7 +121,8 @@ export type ClientCommand =
       answerPlayerId: string;
       decision: VoteDecision;
     } & CommandRequest)
-  | ({ type: 'round:next'; roundId: string } & CommandRequest);
+  | ({ type: 'round:next'; roundId: string } & CommandRequest)
+  | ({ type: 'round:review:next'; roundId: string } & CommandRequest);
 
 // Server to Client Events
 export type ServerEvent =

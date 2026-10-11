@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { AVATAR_OPTIONS } from '../../../shared/types';
 import type { RoomState, Answer, Player, VoteDecision } from '../types';
 
@@ -8,15 +8,23 @@ interface ResultsScreenProps {
   answers: Answer[];
   onVote: (roundId: string, categoryId: string, answerPlayerId: string, decision: VoteDecision) => void;
   onNextRound: () => void;
+  onNextCategory: () => void;
 }
 
-export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }: ResultsScreenProps) {
+export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, onNextCategory }: ResultsScreenProps) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const nextCategoryBtnRef = useRef<HTMLButtonElement>(null);
   const categoryIndex = room.currentReviewCategoryIndex ?? 0;
   const category = room.categories[categoryIndex];
   const roundId = room.currentRoundId;
   const me = room.players.find((player) => player.id === myPlayerId);
   const isActiveHost = me?.isHost === true && me.status === 'active';
   const hasActiveHost = room.players.some((player) => player.isHost && player.status === 'active');
+
+  // Focus heading when phase or category changes — covers ROUND_RESULTS transition too
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [room.phase, categoryIndex]);
 
   const categoryAnswers = useMemo(
     () => (category ? answers.filter((answer) => answer.categoryId === category.id) : []),
@@ -43,18 +51,41 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
             FASE DE VALIDAÇÃO · CATEGORIA {categoryIndex + 1}/{room.categories.length}
           </span>
-          <h1 tabIndex={-1} className="mt-2 text-2xl font-black text-slate-900 outline-none">
-            {category.name} — Rodada {room.currentRound} de {room.totalRounds}
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-2 text-2xl font-black text-slate-900 outline-none"
+          >
+            {room.phase === 'ROUND_RESULTS'
+              ? `Resultados — Rodada ${room.currentRound} de ${room.totalRounds}`
+              : `${category.name} — Rodada ${room.currentRound} de ${room.totalRounds}`}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Letra {room.currentLetter ?? '—'}. Os votos e resultados são confirmados pelo servidor.
           </p>
         </div>
-        {room.reviewDeadline && (
-          <p className="text-sm font-semibold text-slate-500">
-            Revisão desta categoria termina em {new Date(room.reviewDeadline).toLocaleTimeString()}
-          </p>
-        )}
+
+        <div className="flex flex-col items-end gap-2">
+          {room.reviewDeadline && room.phase === 'CATEGORY_REVIEW' && (
+            <p className="text-sm font-semibold text-slate-500">
+              Revisão desta categoria termina em{' '}
+              {new Date(room.reviewDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>
+          )}
+
+          {/* Host can advance to next category without waiting for timer */}
+          {room.phase === 'CATEGORY_REVIEW' && isActiveHost && (
+            <button
+              ref={nextCategoryBtnRef}
+              type="button"
+              onClick={onNextCategory}
+              className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined text-base">skip_next</span>
+              Próxima Palavra / Categoria
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -66,9 +97,10 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
             const votes = answer.votes ?? {};
             const ownVote = votes[myPlayerId];
             const invalidVotes = Object.values(votes).filter((decision) => decision === 'invalidate').length;
-            const validVotes = Object.values(votes).filter((decision) => decision === 'valid').length;
             const eligibleVoters = answer.eligibleVoters?.length ?? 0;
-            const canVote = Boolean(
+
+            // Voting is only for invalidating; author cannot vote on own answer
+            const canInvalidate = Boolean(
               room.phase === 'CATEGORY_REVIEW' &&
               me?.status === 'active' &&
               value &&
@@ -92,32 +124,47 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
                     <p className="mt-2 text-2xl font-black text-slate-900">
                       {value || <span className="text-slate-400">— Sem resposta —</span>}
                     </p>
+                    {/* Validity indicator */}
+                    {value && (
+                      <p className={`mt-1 text-xs font-semibold ${answer.isValid ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {answer.isValid ? '✓ Resposta válida' : '✗ Resposta inválida (não inicia com a letra sorteada)'}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right text-xs font-semibold text-slate-500">
-                    <p>{validVotes} voto(s) válido</p>
                     <p>{invalidVotes} voto(s) para invalidar</p>
                     <p>{eligibleVoters} votante(s) elegível(is)</p>
                   </div>
                 </div>
 
-                {canVote && (
+                {/* Vote controls: only show "Invalidar" toggle — voting is optional */}
+                {canInvalidate && (
                   <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-                    <span className="mr-2 text-xs font-semibold text-slate-500">Seu voto:</span>
-                    {(['valid', 'invalidate'] as const).map((decision) => (
-                      <button
-                        key={decision}
-                        type="button"
-                        aria-pressed={ownVote === decision}
-                        onClick={() => onVote(roundId, category.id, answer.playerId, decision)}
-                        className={`rounded-lg px-3 py-2 text-xs font-bold transition ${ownVote === decision
-                          ? 'bg-indigo-600 text-white'
-                          : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
-                      >
-                        {decision === 'valid' ? 'Válida' : 'Invalidar'}
-                      </button>
-                    ))}
-                    {ownVote && <span className="text-xs text-emerald-700">Voto confirmado pelo servidor</span>}
+                    <span className="mr-2 text-xs font-semibold text-slate-500">
+                      Contestar resposta:
+                    </span>
+                    <button
+                      type="button"
+                      aria-pressed={ownVote === 'invalidate'}
+                      onClick={() =>
+                        onVote(
+                          roundId,
+                          category.id,
+                          answer.playerId,
+                          ownVote === 'invalidate' ? 'valid' : 'invalidate',
+                        )
+                      }
+                      className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
+                        ownVote === 'invalidate'
+                          ? 'bg-rose-600 text-white ring-2 ring-rose-400'
+                          : 'border border-slate-200 bg-white text-slate-700 hover:bg-rose-50 hover:border-rose-300'
+                      }`}
+                    >
+                      {ownVote === 'invalidate' ? 'Invalidada por você ✓' : 'Invalidar'}
+                    </button>
+                    {ownVote === 'invalidate' && (
+                      <span className="text-xs text-rose-700">Clique novamente para desfazer</span>
+                    )}
                   </div>
                 )}
                 {isAuthor && (
@@ -178,7 +225,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
           )}
           {room.phase === 'CATEGORY_REVIEW' && isActiveHost && (
             <p className="mt-2 text-xs font-semibold text-indigo-700">
-              A revisão avança automaticamente ao fim do tempo.
+              A revisão avança automaticamente ao fim do tempo, ou use o botão acima para avançar.
             </p>
           )}
           {room.phase === 'CATEGORY_REVIEW' && !hasActiveHost && (

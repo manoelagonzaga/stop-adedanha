@@ -45,9 +45,9 @@ export function LobbyScreen({
   const hasActiveHost = room.players.some((player) => player.isHost && player.status === 'active');
 
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [selectedPack, setSelectedPack] = useState<'classico' | 'geek' | 'expert' | null>(null);
 
   const categoryNames = room.categories.map((c: Category) => c.name);
-  let selectedPack = '';
   const roundTime = room.roundDurationSeconds ?? 60;
   const allowedLetters = room.allowedLetters ?? ALL_LETTERS;
   const excludedLetters = ALL_LETTERS.filter((letter) => !allowedLetters.includes(letter));
@@ -75,7 +75,7 @@ export function LobbyScreen({
 
   function handleLoadPack(packName: keyof typeof CATEGORY_PACKS) {
     if (!canEditLobby) return;
-    selectedPack = packName;
+    setSelectedPack(packName);
     const pack = CATEGORY_PACKS[packName];
     onUpdateCategories(pack);
   }
@@ -159,11 +159,11 @@ export function LobbyScreen({
               <span aria-hidden="true" className="material-symbols-outlined fill text-xs">star</span>
               {isHost ? 'VOCÊ É O HOST' : hasActiveHost ? 'CONVIDADO' : 'SEM ANFITRIÃO ATIVO'}
             </span>
-            <span className="text-xs text-slate-400">•</span>
+            {/* <span className="text-xs text-slate-400">•</span>
             <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Estado atual recebido do servidor
-            </span>
+            </span> */}
           </div>
           <h1 tabIndex={-1} className="mt-1 text-2xl font-black text-slate-900 outline-none md:text-3xl">
             Sala Privada: <span className="text-indigo-600">#{room.code}</span>
@@ -179,7 +179,7 @@ export function LobbyScreen({
         </div>
 
         {/* Botões de Ação do Topo */}
-        <div className="flex w-full items-center gap-2.5 sm:w-auto">
+        <div className="flex flex-wrap w-full items-center gap-2.5 sm:w-auto">
           <button
             type="button"
             onClick={handleCopyLink}
@@ -199,11 +199,11 @@ export function LobbyScreen({
             </button>
           ) : actionStatus?.status === 'pending' ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-              Aguardando confirmação do servidor…
+              Salvando configurações…
             </span>
           ) : isHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-              Entre 2 jogadores ativos e configure ao menos uma categoria para iniciar.
+              São necessários 2 jogadores ativos e ao menos uma categoria para iniciar.
             </span>
           ) : !hasActiveHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
@@ -217,7 +217,7 @@ export function LobbyScreen({
         </div>
       </div>
 
-      {actionStatus && (
+      {/* {actionStatus && (
         <p
           role={actionStatus.status === 'rejected' ? 'alert' : 'status'}
           aria-live={actionStatus.status === 'rejected' ? 'assertive' : 'polite'}
@@ -230,7 +230,7 @@ export function LobbyScreen({
         >
           {actionStatus.message}
         </p>
-      )}
+      )} */}
 
       <div className="mt-6 space-y-6">
         {/* Card 1: Estrutura da Partida (Rodadas + Tempo) */}
@@ -298,7 +298,7 @@ export function LobbyScreen({
 
         {/* Card 2: Categorias da Partida */}
         <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
-          <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div className="mb-3 flex flex-wrap justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">category</span>
@@ -311,13 +311,13 @@ export function LobbyScreen({
               </div>
             </div>
             {canEditLobby && (
-              <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <span className="font-medium text-slate-400">Packs:</span>
                 <button
                   type="button"
                   aria-pressed={selectedPack === 'classico'}
                   onClick={() => handleLoadPack('classico')}
-                  className="rounded-lg bg-indigo-50 px-2.5 py-1 font-bold text-indigo-700 transition hover:bg-indigo-100"
+                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'classico' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
                 >
                   Clássico
                 </button>
@@ -325,7 +325,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'geek'}
                   onClick={() => handleLoadPack('geek')}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-700 transition hover:bg-slate-200"
+                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'geek' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                 >
                   Geek/Pop
                 </button>
@@ -333,7 +333,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'expert'}
                   onClick={() => handleLoadPack('expert')}
-                  className="rounded-lg bg-rose-50 px-2.5 py-1 font-bold text-rose-700 transition hover:bg-rose-100"
+                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'expert' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}
                 >
                   Expert 🌶️
                 </button>
@@ -368,7 +368,7 @@ export function LobbyScreen({
 
           {/* Adicionar Nova Categoria */}
           {canEditLobby && (
-            <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
               <input
                 type="text"
                 value={newCategoryInput}

@@ -50,6 +50,7 @@ const MUTATION_PHASES: Partial<Record<ClientCommand['type'], GamePhase>> = {
   'round:stop': 'ROUND_ACTIVE',
   'answer:vote': 'CATEGORY_REVIEW',
   'round:next': 'ROUND_RESULTS',
+  'round:review:next': 'CATEGORY_REVIEW',
 };
 const HOST_ONLY_COMMANDS = new Set<ClientCommand['type']>([
   'lobby:categories:update',
@@ -57,6 +58,7 @@ const HOST_ONLY_COMMANDS = new Set<ClientCommand['type']>([
   'lobby:options:update',
   'game:start',
   'round:next',
+  'round:review:next',
 ]);
 
 function isAvatar(value: unknown): value is Avatar {
@@ -488,6 +490,8 @@ export class GameRoom implements DurableObject {
         return this.handleAnswerVote(socket, playerId, cmd);
       case 'round:next':
         return this.handleRoundNext(socket, playerId, cmd);
+      case 'round:review:next':
+        return this.handleRoundReviewNext(socket, playerId, cmd);
       default:
         this.sendError(socket, 'UNKNOWN_COMMAND', 'Unknown command type', cmd.requestId);
     }
@@ -1257,6 +1261,35 @@ export class GameRoom implements DurableObject {
     if (this.isCategoryReviewComplete(roundData, this.room.currentReviewCategoryIndex ?? 0)) {
       await this.completeCategoryReview(roundData, this.room.currentReviewCategoryIndex ?? 0);
     }
+  }
+
+  // ── Round Review: Next Category (manual skip) ────────────────────────────
+
+  private async handleRoundReviewNext(
+    socket: WebSocket,
+    playerId: string,
+    cmd: Extract<ClientCommand, { type: 'round:review:next' }>,
+  ): Promise<void> {
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Apenas jogadores ativos podem avançar a revisão', cmd.requestId);
+      return;
+    }
+    if (!this.isHost(playerId)) {
+      this.sendError(socket, 'NOT_HOST', 'Apenas o anfitrião pode avançar a revisão de categoria', cmd.requestId);
+      return;
+    }
+    const roundData = this.currentRoundData;
+    if (
+      this.room.phase !== 'CATEGORY_REVIEW' ||
+      !roundData ||
+      cmd.roundId !== roundData.id ||
+      this.room.currentRoundId !== roundData.id
+    ) {
+      this.sendError(socket, 'ROUND_CLOSED', 'Não há revisão de categoria ativa para avançar', cmd.requestId);
+      return;
+    }
+    await this.completeCategoryReview(roundData, this.room.currentReviewCategoryIndex ?? 0);
   }
 
   private async handleRoundNext(

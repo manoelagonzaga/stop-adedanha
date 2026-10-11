@@ -6,7 +6,8 @@ interface EntryScreenProps {
   onEnterRoom: (nickname: string, roomCode: string, avatar: Avatar) => void;
   onCreateRoom: (nickname: string, avatar: Avatar) => void | Promise<void>;
   error?: string | null;
-  isLoading?: boolean;
+  /** Which action is currently pending. 'create' or 'join' shows a spinner only on that button. */
+  pendingAction?: 'create' | 'join' | null;
   initialRoomCode?: string | null;
 }
 
@@ -14,14 +15,17 @@ export function EntryScreen({
   onEnterRoom,
   onCreateRoom,
   error,
-  isLoading = false,
+  pendingAction = null,
   initialRoomCode = null,
 }: EntryScreenProps) {
   const { showToast } = useToast();
 
   const [createNick, setCreateNick] = useState('');
   const [joinNick, setJoinNick] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState<Avatar>(AVATAR_OPTIONS[0]);
+
+  // Each card has its own independent avatar state
+  const [createAvatar, setCreateAvatar] = useState<Avatar>(AVATAR_OPTIONS[0]);
+  const [joinAvatar, setJoinAvatar] = useState<Avatar>(AVATAR_OPTIONS[0]);
 
   // 6-digit PIN state
   const [pinDigits, setPinDigits] = useState<string[]>(() => {
@@ -70,9 +74,15 @@ export function EntryScreen({
     });
   }
 
-  function handleRandomAvatar() {
+  function handleRandomCreateAvatar() {
     const random = AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)];
-    setSelectedAvatar(random);
+    setCreateAvatar(random);
+    showToast(`Avatar alterado para ${random}`);
+  }
+
+  function handleRandomJoinAvatar() {
+    const random = AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)];
+    setJoinAvatar(random);
     showToast(`Avatar alterado para ${random}`);
   }
 
@@ -82,7 +92,7 @@ export function EntryScreen({
       showToast('Por favor, informe seu apelido.');
       return;
     }
-    void onCreateRoom(nick, selectedAvatar);
+    void onCreateRoom(nick, createAvatar);
   }
 
   function handleActionJoin() {
@@ -96,8 +106,11 @@ export function EntryScreen({
       showToast('Digite os 6 caracteres do código da sala.');
       return;
     }
-    onEnterRoom(nick, code, selectedAvatar);
+    onEnterRoom(nick, code, joinAvatar);
   }
+
+  const isCreating = pendingAction === 'create';
+  const isJoining = pendingAction === 'join';
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
@@ -122,7 +135,7 @@ export function EntryScreen({
             {error}
           </div>
         )}
-        {isLoading && (
+        {pendingAction && (
           <p role="status" className="mx-auto mt-4 max-w-md text-sm font-semibold text-indigo-700">
             Conectando à sala e aguardando confirmação do servidor...
           </p>
@@ -167,12 +180,12 @@ export function EntryScreen({
                     value={createNick}
                     onChange={(e) => setCreateNick(e.target.value)}
                     maxLength={24}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-4 pl-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-4 pl-10 text-base font-semibold text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white"
                   />
                 </div>
               </div>
 
-              {/* Escolha de Avatar */}
+              {/* Escolha de Avatar — Card Criar */}
               <div>
                 <label id="create-avatar-label" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Seu Avatar
@@ -183,10 +196,10 @@ export function EntryScreen({
                       key={emoji}
                       type="button"
                       aria-label={`Selecionar avatar ${emoji}`}
-                      aria-pressed={selectedAvatar === emoji}
-                      onClick={() => setSelectedAvatar(emoji)}
+                      aria-pressed={createAvatar === emoji}
+                      onClick={() => setCreateAvatar(emoji)}
                       className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl transition-transform hover:scale-105 ${
-                        selectedAvatar === emoji
+                        createAvatar === emoji
                           ? 'border-2 border-indigo-600 bg-indigo-100 shadow-sm'
                           : 'border-2 border-transparent bg-slate-100'
                       }`}
@@ -196,7 +209,7 @@ export function EntryScreen({
                   ))}
                   <button
                     type="button"
-                    onClick={handleRandomAvatar}
+                    onClick={handleRandomCreateAvatar}
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 transition hover:bg-slate-100"
                     aria-label="Sortear avatar aleatório"
                   >
@@ -212,11 +225,12 @@ export function EntryScreen({
             <button
               type="button"
               onClick={handleActionCreate}
-              disabled={isLoading}
+              disabled={isCreating}
+              aria-busy={isCreating}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-xl">rocket_launch</span>
-              {isLoading ? 'Conectando à sala...' : 'Criar Sala e Convidar Amigos'}
+              {isCreating ? 'Conectando à sala...' : 'Criar Sala e Convidar Amigos'}
             </button>
             <p className="mt-2.5 flex items-center justify-center gap-1 text-center text-[11px] font-medium text-slate-400">
               <span aria-hidden="true" className="material-symbols-outlined text-sm text-emerald-500">check_circle</span>
@@ -268,6 +282,7 @@ export function EntryScreen({
                 </div>
               </div>
 
+              {/* Escolha de Avatar — Card Entrar */}
               <div>
                 <label id="join-avatar-label" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Seu Avatar
@@ -278,10 +293,10 @@ export function EntryScreen({
                       key={emoji}
                       type="button"
                       aria-label={`Selecionar avatar ${emoji}`}
-                      aria-pressed={selectedAvatar === emoji}
-                      onClick={() => setSelectedAvatar(emoji)}
+                      aria-pressed={joinAvatar === emoji}
+                      onClick={() => setJoinAvatar(emoji)}
                       className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl transition-transform hover:scale-105 ${
-                        selectedAvatar === emoji
+                        joinAvatar === emoji
                           ? 'border-2 border-rose-600 bg-rose-100 shadow-sm'
                           : 'border-2 border-transparent bg-slate-100'
                       }`}
@@ -291,7 +306,7 @@ export function EntryScreen({
                   ))}
                   <button
                     type="button"
-                    onClick={handleRandomAvatar}
+                    onClick={handleRandomJoinAvatar}
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 transition hover:bg-slate-100"
                     aria-label="Sortear avatar aleatório"
                   >
@@ -313,10 +328,12 @@ export function EntryScreen({
                       aria-label={`Dígito ${i + 1} do código da sala`}
                       ref={(el) => { pinInputsRef.current[i] = el; }}
                       type="text"
+                      inputMode="text"
                       maxLength={1}
                       value={digit}
                       onChange={(e) => handleDigitChange(i, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(i, e)}
+                      onPaste={i === 0 ? (e) => handlePastePin(e) : undefined}
                       className="aspect-square w-full rounded-xl border-2 border-slate-200 bg-slate-50 text-center text-lg font-black text-slate-900 uppercase outline-none transition focus:border-rose-500 focus:bg-white"
                     />
                   ))}
@@ -339,11 +356,12 @@ export function EntryScreen({
             <button
               type="button"
               onClick={handleActionJoin}
-              disabled={isLoading}
+              disabled={isJoining}
+              aria-busy={isJoining}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-base font-bold text-white shadow-lg shadow-rose-300/50 transition hover:bg-rose-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-xl">sports_esports</span>
-              {isLoading ? 'Conectando à sala...' : 'Entrar no Jogo Agora'}
+              {isJoining ? 'Conectando à sala...' : 'Entrar no Jogo Agora'}
             </button>
             <p className="mt-2.5 text-center text-[11px] font-medium text-slate-400">
               Não precisa de cadastro ou download • Direto no navegador
@@ -389,7 +407,7 @@ export function EntryScreen({
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-lg font-black text-rose-600">
               03
             </div>
-            <h3 className="text-base font-bold text-slate-800">Grite STOP! & Pontue</h3>
+            <h3 className="text-base font-bold text-slate-800">Grite STOP! &amp; Pontue</h3>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
               Acabou de preencher? Clique no botão gigante de STOP! O cronômetro congela para todos. Palavras únicas valem 10 pontos e repetidas 5 pontos.
             </p>

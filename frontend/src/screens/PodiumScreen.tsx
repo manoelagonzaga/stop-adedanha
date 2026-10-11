@@ -38,16 +38,6 @@ const TIER_CONFIG: Record<
   },
 };
 
-const AVATARS = ['🦊', '🐙', '🐵', '🦁', '🐸', '🦄', '🐧', '🦋'];
-
-function getAvatar(playerId: string): string {
-  let hash = 0;
-  for (let i = 0; i < playerId.length; i++) {
-    hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATARS[Math.abs(hash) % AVATARS.length];
-}
-
 function PodiumColumn({ item }: { item: PodiumItem }) {
   const cfg = TIER_CONFIG[item.tier];
   const [visible, setVisible] = useState(false);
@@ -73,26 +63,27 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
 
       {/* Avatar */}
       <div
-        className={`flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br ${cfg.bg} ring-4 ${cfg.ring} text-3xl shadow-xl`}
+        className={`flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-gradient-to-br ${cfg.bg} ring-2 sm:ring-4 ${cfg.ring} text-2xl sm:text-3xl shadow-xl`}
+        aria-label={`${cfg.label}: ${item.nickname}, ${item.score} pontos`}
       >
-        {item.avatar ?? getAvatar(item.playerId)}
+        {item.avatar ?? '🦊'}
       </div>
 
       {/* Name + Score */}
       <div className="mt-2 text-center">
-        <span className="block max-w-[120px] truncate text-sm font-black text-slate-900 drop-shadow">
+        <span className="block max-w-[80px] sm:max-w-[120px] truncate text-xs sm:text-sm font-black text-slate-900 drop-shadow">
           {item.nickname}
         </span>
-        <span className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-slate-500">
-          {item.score} pontos
+        <span className="mt-0.5 block rounded-full bg-white/20 px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-black text-slate-500">
+          {item.score} pts
         </span>
       </div>
 
       {/* Podium Block */}
       <div
-        className={`mt-3 flex w-28 items-center justify-center rounded-t-2xl bg-gradient-to-b ${cfg.bg} ${cfg.height} shadow-lg`}
+        className={`mt-3 flex w-20 sm:w-28 items-center justify-center rounded-t-2xl bg-gradient-to-b ${cfg.bg} ${cfg.height} shadow-lg`}
       >
-        <span className="text-2xl font-black text-slate-900">{item.position}º</span>
+        <span className="text-xl sm:text-2xl font-black text-slate-900">{item.position}º</span>
       </div>
     </div>
   );
@@ -132,7 +123,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
       </div>
 
       {/* Podium Stage */}
-      <div className="mt-12 flex w-full max-w-xl items-end justify-center gap-4">
+      <div className="mt-8 sm:mt-12 flex w-full max-w-xl items-end justify-center gap-2 sm:gap-4">
         {sortedPodium.map((item) => (
           <PodiumColumn key={item.playerId} item={item} />
         ))}
@@ -156,19 +147,19 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
               return (
                 <div
                   key={item.playerId}
-                  className={`flex items-center justify-between px-5 py-3 ${idx < results.list.length - 1 ? 'border-b border-white/10' : ''
+                  className={`flex items-center justify-between px-4 sm:px-5 py-3 ${idx < results.list.length - 1 ? 'border-b border-white/10' : ''
                     } ${isMe ? 'bg-indigo-500/20' : ''}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-black text-slate-900">
                       {item.position}º
                     </span>
-                    <span aria-hidden="true" className="text-xl">{item.avatar ?? getAvatar(item.playerId)}</span>
-                    <span className="text-sm font-bold text-slate-900">
+                    <span aria-hidden="true" className="text-xl">{item.avatar ?? '🦊'}</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[140px] sm:max-w-none">
                       {item.nickname} {isMe && <span className="text-indigo-300">(Você)</span>}
                     </span>
                   </div>
-                  <span className="text-sm font-black text-slate-500">{item.score} pontos</span>
+                  <span className="text-xs sm:text-sm font-black text-slate-500">{item.score} pts</span>
                 </div>
               );
             })}
@@ -178,13 +169,13 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
 
       {/* Action buttons */}
       <div
-        className={`mt-10 flex flex-col items-center gap-3 sm:flex-row transition-all duration-700 delay-300 ${showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+        className={`mt-8 sm:mt-10 flex w-full max-w-sm flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center transition-all duration-700 delay-300 ${showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
           }`}
       >
         <button
           type="button"
           onClick={onPlayAgain}
-          className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black font-bold text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95"
+          className="flex min-h-[48px] w-full sm:w-auto items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 sm:px-8 py-3.5 sm:py-4 text-base font-black text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95"
         >
           <span aria-hidden="true" className="material-symbols-outlined">replay</span>
           Jogar Novamente
@@ -192,7 +183,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
         <button
           type="button"
           onClick={onBackToHome}
-          className="flex items-center gap-2 rounded-2xl border border-white/20 bg-rose-600 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
+          className="flex min-h-[48px] w-full sm:w-auto items-center justify-center gap-2 rounded-2xl border border-white/20 bg-rose-600 px-6 sm:px-8 py-3.5 sm:py-4 text-base font-bold text-white backdrop-blur-sm transition hover:bg-rose-700 active:scale-95"
         >
           <span aria-hidden="true" className="material-symbols-outlined">home</span>
           Voltar ao Início

@@ -10,6 +10,20 @@ interface GameScreenProps {
   onStop: (roundId: string) => void;
 }
 
+type IntroPhase = 'spinning' | 'revealed' | 'countdown' | 'playing';
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+/** Produces a human-readable duration string that screen readers will read correctly */
+function accessibleDuration(totalSeconds: number): string {
+  if (totalSeconds <= 0) return '0 segundos restantes';
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if (mins > 0 && secs > 0) return `${mins} minuto${mins > 1 ? 's' : ''} e ${secs} segundo${secs !== 1 ? 's' : ''} restantes`;
+  if (mins > 0) return `${mins} minuto${mins > 1 ? 's' : ''} restantes`;
+  return `${secs} segundo${secs !== 1 ? 's' : ''} restantes`;
+}
+
 export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
   const { showToast } = useToast();
   const roundId = room.currentRoundId ?? `round-${room.currentRound}`;
@@ -19,13 +33,79 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
   const [isStopped, setIsStopped] = useState<boolean>(false);
   const stopRequestedRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
+
+  // ── Intro Animation State ───────────────────────────────────────────────────
+  const [introPhase, setIntroPhase] = useState<IntroPhase>('spinning');
+  const [spinningLetter, setSpinningLetter] = useState(ALPHABET[0]);
+  const [countdownValue, setCountdownValue] = useState(3);
+  // Announce text for screen readers — must change to re-trigger aria-live
+  const [srAnnounce, setSrAnnounce] = useState('sorteando letra');
+
   const currentLetter = room.currentLetter ?? 'M';
   const timeLeft =
     room.roundDeadline === undefined
       ? null
       : Math.max(0, Math.ceil((room.roundDeadline - now) / 1000));
 
-  // The displayed countdown follows the deadline supplied by the room server.
+  // ── Intro animation: spinning → revealed → countdown → playing ──────────────
+  useEffect(() => {
+    setIntroPhase('spinning');
+    setCountdownValue(3);
+    setSrAnnounce('sorteando letra');
+
+    // Rapid letter cycling for 1.2 s
+    const spinDuration = 1200;
+    const spinInterval = setInterval(() => {
+      setSpinningLetter(ALPHABET[Math.floor(Math.random() * ALPHABET.length)]);
+    }, 80);
+
+    const revealTimer = setTimeout(() => {
+      clearInterval(spinInterval);
+      setSpinningLetter(currentLetter);
+      setSrAnnounce(`letra sorteada: ${currentLetter}`);
+      setIntroPhase('revealed');
+    }, spinDuration);
+
+    const countdownStartTimer = setTimeout(() => {
+      setIntroPhase('countdown');
+      setCountdownValue(3);
+    }, spinDuration + 1000);
+
+    return () => {
+      clearInterval(spinInterval);
+      clearTimeout(revealTimer);
+      clearTimeout(countdownStartTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roundId]);
+
+  // ── Countdown 3, 2, 1 → playing ─────────────────────────────────────────────
+  useEffect(() => {
+    if (introPhase !== 'countdown') return;
+
+    if (countdownValue === 3) {
+      setSrAnnounce('Iniciando o jogo em: 3');
+    } else if (countdownValue === 2) {
+      setSrAnnounce('2');
+    } else if (countdownValue === 1) {
+      setSrAnnounce('1');
+    }
+
+    if (countdownValue <= 0) {
+      setIntroPhase('playing');
+      // Focus first input when game unlocks
+      requestAnimationFrame(() => firstInputRef.current?.focus());
+      return;
+    }
+
+    const t = setTimeout(() => {
+      setCountdownValue((v) => v - 1);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [introPhase, countdownValue]);
+
+  // ── Round timer ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (room.roundDeadline === undefined) return;
     setNow(Date.now());
@@ -52,8 +132,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
   // Keyboard shortcut: ENTER to trigger STOP
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Enter' && !isStopped) {
-        // If not in a textarea
+      if (e.key === 'Enter' && !isStopped && introPhase === 'playing') {
         const activeTag = (document.activeElement?.tagName || '').toLowerCase();
         if (activeTag === 'input') {
           e.preventDefault();
@@ -63,7 +142,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTriggerStop, isStopped]);
+  }, [handleTriggerStop, isStopped, introPhase]);
 
   function handleInputChange(categoryId: string, value: string) {
     const nextAnswers = { ...answers, [categoryId]: value.toUpperCase() };
@@ -82,8 +161,58 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
   // Sorted players for live classification
   const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
 
+  const isPlaying = introPhase === 'playing';
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-6" data-game-screen>
+      {/* Screen reader announcements — aria-atomic ensures full re-read on change */}
+      <div
+        data-testid="live-region"
+        role="status"
+        aria-live="assertive"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {srAnnounce}
+      </div>
+
+      {/* ── Intro Overlay: Spinning Letter + Countdown ────────────────────── */}
+      {!isPlaying && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-sm"
+        >
+          <p className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-300">
+            {introPhase === 'spinning' ? 'Sorteando a letra...' : 'Prepare-se!'}
+          </p>
+
+          {/* Letter display */}
+          <div
+            className={`flex h-36 w-36 items-center justify-center rounded-3xl font-black text-8xl shadow-2xl transition-all duration-300 ${introPhase === 'spinning'
+                ? 'animate-pulse bg-indigo-700 text-indigo-100 shadow-indigo-800'
+                : 'scale-110 bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-purple-800'
+              }`}
+          >
+            {introPhase === 'spinning' ? spinningLetter : currentLetter}
+          </div>
+
+          {/* Countdown */}
+          {introPhase === 'countdown' && (
+            <div className="mt-8 flex flex-col items-center gap-2">
+              <span
+                key={countdownValue}
+                className="animate-ping-once text-6xl font-black text-white drop-shadow-xl"
+              >
+                {countdownValue > 0 ? countdownValue : '▶'}
+              </span>
+              <p className="mt-2 text-xs font-semibold text-slate-400">
+                O jogo começa em instantes...
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Barra Superior da Rodada */}
       <div className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm md:flex-row md:p-6">
         {/* Info da Rodada */}
@@ -105,8 +234,12 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
         </div>
 
         {/* Cronômetro Decrescente */}
-        <div className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
-          }`}>
+        <div
+          data-testid="timer-display"
+          className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
+            }`}
+          aria-label={timeLeft === null ? 'Sem limite de tempo' : accessibleDuration(timeLeft)}
+        >
           <div className="relative flex h-10 w-10 items-center justify-center">
             <span aria-hidden="true" className={`material-symbols-outlined text-2xl ${timeLeft !== null && timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
               }`}>
@@ -117,8 +250,12 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Tempo Restante
             </span>
-            <span className={`text-2xl font-black tracking-tight ${timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
-              }`}>
+            {/* Visual mm:ss is aria-hidden; accessible label is on the parent container */}
+            <span
+              aria-hidden="true"
+              className={`text-2xl font-black tracking-tight ${timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
+                }`}
+            >
               {timeLeft === null ? 'Sem limite' : `${minutes}:${seconds}`}
             </span>
           </div>
@@ -145,7 +282,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             {room.categories.map((cat: Category, index: number) => {
               const val = answers[cat.id] || '';
               const isFilled = val.trim().length > 0;
-              const startsWithLetter = val.trim().startsWith(currentLetter);
+             // const startsWithLetter = val.trim().startsWith(currentLetter);
 
               return (
                 <div
@@ -163,25 +300,15 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                   </span>
                   <input
                     type="text"
+                    ref={index === 0 ? firstInputRef : undefined}
                     value={val}
                     onChange={(e) => handleInputChange(cat.id, e.target.value)}
                     placeholder={`${cat.name} com a letra ${currentLetter}...`}
-                    disabled={isStopped}
+                    disabled={isStopped || !isPlaying}
                     autoComplete="off"
-                    className="game-field flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300"
+                    aria-label={`${cat.name} com a letra ${currentLetter}`}
+                    className="game-field flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                  {isFilled ? (
-                    <span
-                      aria-hidden="true"
-                      className={`material-symbols-outlined text-lg ${startsWithLetter ? 'text-emerald-500' : 'text-amber-500'
-                        }`}
-                      title={startsWithLetter ? 'Inicia com a letra sorteada' : 'Atenção: não inicia com a letra sorteada'}
-                    >
-                      check_circle
-                    </span>
-                  ) : (
-                    <span aria-hidden="true" className="text-xs font-bold text-slate-300">TAB ⇥</span>
-                  )}
                 </div>
               );
             })}
@@ -202,8 +329,8 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             <button
               type="button"
               onClick={() => handleTriggerStop()}
-              disabled={isStopped}
-              className="animate-stop-btn flex items-center gap-3 rounded-2xl bg-rose-600 px-8 py-4 text-xl font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
+              disabled={isStopped || !isPlaying}
+              className="animate-stop-btn flex min-h-[56px] items-center gap-3 rounded-2xl bg-rose-600 px-8 py-4 text-xl font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-3xl">pan_tool</span>
               Gritar STOP!
@@ -218,7 +345,10 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             <span className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
               Letra Sorteada da Vez
             </span>
-            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-600 font-black text-5xl text-white shadow-xl shadow-indigo-300">
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-600 font-black text-5xl text-white shadow-xl shadow-indigo-300"
+              aria-label={`Letra sorteada: ${currentLetter}`}
+            >
               {currentLetter}
             </div>
             <p className="mt-2 text-xs font-medium text-slate-500">
@@ -240,7 +370,6 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             <div className="mt-4 space-y-3">
               {sortedPlayers.map((player, index) => {
                 const isMe = player.id === myPlayerId;
-                // Compute progress: For current player, use real filledCount; for others, simulate active progress
                 const playerProgress = isMe
                   ? progressPercent
                   : Math.min(100, Math.max(25, 80 - index * 18));
@@ -258,7 +387,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                   >
                     <div className="flex items-center justify-between text-xs font-bold">
                       <div className="flex items-center gap-2">
-                        <span className="text-base">{isMe ? '🦊' : '🐙'}</span>
+                        <span className="text-base">{player.avatar ?? '🦊'}</span>
                         <span className={isMe ? 'text-indigo-900' : 'text-slate-800'}>
                           {player.nickname} {isMe && '(Você)'}
                         </span>
