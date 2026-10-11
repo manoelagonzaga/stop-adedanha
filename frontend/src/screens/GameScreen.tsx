@@ -230,7 +230,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
           <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <span className="material-symbols-outlined text-amber-500">leaderboard</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-amber-500">leaderboard</span>
                 Classificação ao Vivo
               </h3>
               <span className="text-xs text-slate-400">Rodada {room.currentRound}</span>

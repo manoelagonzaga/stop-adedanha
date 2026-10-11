@@ -83,8 +83,8 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
         <span className="block max-w-[120px] truncate text-sm font-black text-slate-900 drop-shadow">
           {item.nickname}
         </span>
-        <span aria-label={`${item.score} pontos`} className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-slate-500">
-          {item.score} pts
+        <span className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-slate-500">
+          {item.score} pontos
         </span>
       </div>
 
@@ -92,7 +92,7 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
       <div
         className={`mt-3 flex w-28 items-center justify-center rounded-t-2xl bg-gradient-to-b ${cfg.bg} ${cfg.height} shadow-lg`}
       >
-        <span aria-label={`${item.position}º lugar`} className="text-2xl font-black text-slate-900">{item.position}º</span>
+        <span className="text-2xl font-black text-slate-900">{item.position}º</span>
       </div>
     </div>
   );
@@ -168,7 +168,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
                       {item.nickname} {isMe && <span className="text-indigo-300">(Você)</span>}
                     </span>
                   </div>
-                  <span aria-label={`${item.score} pontos`} className="text-sm font-black text-slate-500">{item.score} pts</span>
+                  <span className="text-sm font-black text-slate-500">{item.score} pontos</span>
                 </div>
               );
             })}

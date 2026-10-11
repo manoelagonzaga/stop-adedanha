@@ -183,7 +183,6 @@ export function LobbyScreen({
           <button
             type="button"
             onClick={handleCopyLink}
-            aria-label={`Copiar Link da Sala`}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
             <span aria-hidden="true" className="material-symbols-outlined text-lg">link</span>
@@ -223,10 +222,10 @@ export function LobbyScreen({
           role={actionStatus.status === 'rejected' ? 'alert' : 'status'}
           aria-live={actionStatus.status === 'rejected' ? 'assertive' : 'polite'}
           className={`mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${actionStatus.status === 'rejected'
-              ? 'border-rose-200 bg-rose-50 text-rose-700'
-              : actionStatus.status === 'pending'
-                ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            ? 'border-rose-200 bg-rose-50 text-rose-700'
+            : actionStatus.status === 'pending'
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
             }`}
         >
           {actionStatus.message}
@@ -261,8 +260,8 @@ export function LobbyScreen({
                     aria-pressed={room.totalRounds === count}
                     onClick={() => handleSelectRounds(count)}
                     className={`py-2 rounded-xl text-sm font-bold transition ${room.totalRounds === count
-                        ? 'border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm'
-                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
+                      ? 'border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm'
+                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
                       }`}
                   >
                     {count}
@@ -285,8 +284,8 @@ export function LobbyScreen({
                     aria-pressed={roundTime === value}
                     onClick={() => handleSelectTime(value)}
                     className={`py-2 rounded-xl text-sm font-bold transition ${roundTime === value
-                        ? 'border-2 border-rose-500 bg-rose-500 text-white shadow-sm'
-                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-rose-400'
+                      ? 'border-2 border-rose-500 bg-rose-500 text-white shadow-sm'
+                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-rose-400'
                       }`}
                   >
                     {label}
@@ -435,8 +434,8 @@ export function LobbyScreen({
                   aria-pressed={!isExcluded}
                   onClick={() => handleToggleLetter(letter)}
                   className={`h-9 rounded-lg text-xs font-bold border transition ${isExcluded
-                      ? 'border-slate-200 bg-slate-100 text-slate-300 line-through'
-                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400 hover:bg-indigo-50'
+                    ? 'border-slate-200 bg-slate-100 text-slate-300 line-through'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400 hover:bg-indigo-50'
                     }`}
                 >
                   {letter}
