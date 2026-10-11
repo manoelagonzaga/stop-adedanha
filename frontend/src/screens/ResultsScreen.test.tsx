@@ -86,8 +86,8 @@ describe('ResultsScreen authoritative voting', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Cidade — Rodada 1 de 3' })).toBeInTheDocument();
-    expect(screen.getByText('12.5 pts')).toBeInTheDocument();
-    expect(screen.getByText('7 pts')).toBeInTheDocument();
+    expect(screen.getByText('12.5 pontos')).toBeInTheDocument();
+    expect(screen.getByText('7 pontos')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Próxima Categoria/ })).not.toBeInTheDocument();
   });
 

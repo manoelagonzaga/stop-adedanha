@@ -110,8 +110,8 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
                         aria-pressed={ownVote === decision}
                         onClick={() => onVote(roundId, category.id, answer.playerId, decision)}
                         className={`rounded-lg px-3 py-2 text-xs font-bold transition ${ownVote === decision
-                            ? 'bg-indigo-600 text-white'
-                            : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          ? 'bg-indigo-600 text-white'
+                          : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                       >
                         {decision === 'valid' ? 'Válida' : 'Invalidar'}
@@ -148,7 +148,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
                   {index + 1}. <span aria-hidden="true" className="text-xl">{player.avatar ?? AVATAR_OPTIONS[0]}</span>
                   {player.nickname}{player.id === myPlayerId ? ' (Você)' : ''}
                 </span>
-                <span aria-label={`${player.score} pontos`} className="text-sm font-black text-slate-900">{player.score} pts</span>
+                <span className="text-sm font-black text-slate-900">{player.score} pontos</span>
               </li>
             ))}
           </ol>

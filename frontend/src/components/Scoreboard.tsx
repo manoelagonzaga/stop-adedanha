@@ -83,7 +83,6 @@ export function Scoreboard({ players, currentRound, totalRounds }: ScoreboardPro
               </div>
 
               <span
-                aria-label={`${player.score} pontos`}
                 className={[
                   'text-xl font-extrabold tabular-nums',
                   isLeader ? 'text-orange' : 'text-navy',

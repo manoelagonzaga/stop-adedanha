@@ -151,8 +151,8 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                 <div
                   key={cat.id}
                   className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${isFilled
-                      ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
-                      : 'border-indigo-100 bg-white hover:border-slate-300'
+                    ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
+                    : 'border-indigo-100 bg-white hover:border-slate-300'
                     } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
                 >
                   <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
@@ -191,7 +191,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
           <div className="mt-6 flex flex-col items-center justify-between gap-4 rounded-3xl border-2 border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 p-5 sm:flex-row">
             <div>
               <div className="flex items-center gap-1.5 text-sm font-black text-rose-600">
-                <span className="material-symbols-outlined text-lg">bolt</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">bolt</span>
                 COMPLETOU TUDO OU QUER ARRISCAR?
               </div>
               <p className="mt-0.5 text-xs text-slate-600">
@@ -230,7 +230,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
           <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <span className="material-symbols-outlined text-amber-500">leaderboard</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-amber-500">leaderboard</span>
                 Classificação ao Vivo
               </h3>
               <span className="text-xs text-slate-400">Rodada {room.currentRound}</span>
@@ -252,8 +252,8 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                   <div
                     key={player.id}
                     className={`rounded-xl p-3 transition ${isMe
-                        ? 'border border-indigo-200 bg-indigo-50/70'
-                        : 'border border-slate-100 bg-slate-50'
+                      ? 'border border-indigo-200 bg-indigo-50/70'
+                      : 'border border-slate-100 bg-slate-50'
                       }`}
                   >
                     <div className="flex items-center justify-between text-xs font-bold">

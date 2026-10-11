@@ -35,7 +35,7 @@ describe('LobbyScreen authoritative options', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Participantes da sala' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copiar Link da Sala #ABC234' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copiar Link da Sala' })).toBeInTheDocument();
     expect(screen.getByText('2 de 20 participantes conectados')).toBeInTheDocument();
     expect(screen.getByText('Guest')).toBeInTheDocument();
     expect(screen.getByText('🐼')).toBeInTheDocument();
