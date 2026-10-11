@@ -188,11 +188,10 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
 
           {/* Letter display */}
           <div
-            className={`flex h-36 w-36 items-center justify-center rounded-3xl font-black text-8xl shadow-2xl transition-all duration-300 ${
-              introPhase === 'spinning'
+            className={`flex h-36 w-36 items-center justify-center rounded-3xl font-black text-8xl shadow-2xl transition-all duration-300 ${introPhase === 'spinning'
                 ? 'animate-pulse bg-indigo-700 text-indigo-100 shadow-indigo-800'
                 : 'scale-110 bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-purple-800'
-            }`}
+              }`}
           >
             {introPhase === 'spinning' ? spinningLetter : currentLetter}
           </div>
@@ -310,18 +309,6 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                     aria-label={`${cat.name} com a letra ${currentLetter}`}
                     className="game-field flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                  {isFilled ? (
-                    <span
-                      aria-hidden="true"
-                      className={`material-symbols-outlined text-lg ${startsWithLetter ? 'text-emerald-500' : 'text-amber-500'
-                        }`}
-                      title={startsWithLetter ? 'Inicia com a letra sorteada' : 'Atenção: não inicia com a letra sorteada'}
-                    >
-                      check_circle
-                    </span>
-                  ) : (
-                    <span aria-hidden="true" className="text-xs font-bold text-slate-300">TAB ⇥</span>
-                  )}
                 </div>
               );
             })}

@@ -199,11 +199,11 @@ export function LobbyScreen({
             </button>
           ) : actionStatus?.status === 'pending' ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-              Aguardando confirmação do servidor…
+              Salvando configurações...
             </span>
           ) : isHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-              Entre 2 jogadores ativos e configure ao menos uma categoria para iniciar.
+              É preciso 2 jogadores ativos e pelo menos uma categoria para iniciar.
             </span>
           ) : !hasActiveHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
@@ -216,21 +216,6 @@ export function LobbyScreen({
           )}
         </div>
       </div>
-
-      {actionStatus && (
-        <p
-          role={actionStatus.status === 'rejected' ? 'alert' : 'status'}
-          aria-live={actionStatus.status === 'rejected' ? 'assertive' : 'polite'}
-          className={`mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${actionStatus.status === 'rejected'
-            ? 'border-rose-200 bg-rose-50 text-rose-700'
-            : actionStatus.status === 'pending'
-              ? 'border-amber-200 bg-amber-50 text-amber-800'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            }`}
-        >
-          {actionStatus.message}
-        </p>
-      )}
 
       <div className="mt-6 space-y-6">
         {/* Card 1: Estrutura da Partida (Rodadas + Tempo) */}
