@@ -478,7 +478,7 @@ export default function App() {
       if (me) {
         prevRoomSettingsRef.current = {
           nickname: me.nickname,
-          avatar: me.avatar,
+          avatar: me?.avatar ?? '🦊',
           categories: room.categories.map((c) => c.name),
           totalRounds: room.totalRounds,
           roundDurationSeconds: room.roundDurationSeconds ?? 60,
