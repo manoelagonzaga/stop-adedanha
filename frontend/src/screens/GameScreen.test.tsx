@@ -41,7 +41,7 @@ describe('GameScreen authoritative timer', () => {
       </ToastProvider>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText(/Ex com A/), { target: { value: 'Ana' } });
+    fireEvent.change(screen.getByPlaceholderText(/Nome com a letra A/), { target: { value: 'Ana' } });
     expect(onSubmitAnswers).toHaveBeenLastCalledWith('round-1', { 'cat-0': 'ANA' });
     expect(screen.getByText('00:03')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1_000));
