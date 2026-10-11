@@ -159,11 +159,11 @@ export function LobbyScreen({
               <span aria-hidden="true" className="material-symbols-outlined fill text-xs">star</span>
               {isHost ? 'VOCÊ É O HOST' : hasActiveHost ? 'CONVIDADO' : 'SEM ANFITRIÃO ATIVO'}
             </span>
-            <span className="text-xs text-slate-400">•</span>
+            {/* <span className="text-xs text-slate-400">•</span>
             <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Estado atual recebido do servidor
-            </span>
+            </span> */}
           </div>
           <h1 tabIndex={-1} className="mt-1 text-2xl font-black text-slate-900 outline-none md:text-3xl">
             Sala Privada: <span className="text-indigo-600">#{room.code}</span>
@@ -179,7 +179,7 @@ export function LobbyScreen({
         </div>
 
         {/* Botões de Ação do Topo */}
-        <div className="flex w-full items-center gap-2.5 sm:w-auto">
+        <div className="flex flex-wrap w-full items-center gap-2.5 sm:w-auto">
           <button
             type="button"
             onClick={handleCopyLink}
@@ -199,11 +199,11 @@ export function LobbyScreen({
             </button>
           ) : actionStatus?.status === 'pending' ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-              Salvando configurações...
+              Salvando configurações…
             </span>
           ) : isHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-              É preciso 2 jogadores ativos e pelo menos uma categoria para iniciar.
+              São necessários 2 jogadores ativos e ao menos uma categoria para iniciar.
             </span>
           ) : !hasActiveHost ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
@@ -216,6 +216,21 @@ export function LobbyScreen({
           )}
         </div>
       </div>
+
+      {/* {actionStatus && (
+        <p
+          role={actionStatus.status === 'rejected' ? 'alert' : 'status'}
+          aria-live={actionStatus.status === 'rejected' ? 'assertive' : 'polite'}
+          className={`mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${actionStatus.status === 'rejected'
+            ? 'border-rose-200 bg-rose-50 text-rose-700'
+            : actionStatus.status === 'pending'
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            }`}
+        >
+          {actionStatus.message}
+        </p>
+      )} */}
 
       <div className="mt-6 space-y-6">
         {/* Card 1: Estrutura da Partida (Rodadas + Tempo) */}
@@ -283,7 +298,7 @@ export function LobbyScreen({
 
         {/* Card 2: Categorias da Partida */}
         <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
-          <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div className="mb-3 flex flex-wrap justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">category</span>
@@ -296,7 +311,7 @@ export function LobbyScreen({
               </div>
             </div>
             {canEditLobby && (
-              <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <span className="font-medium text-slate-400">Packs:</span>
                 <button
                   type="button"
@@ -353,7 +368,7 @@ export function LobbyScreen({
 
           {/* Adicionar Nova Categoria */}
           {canEditLobby && (
-            <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
               <input
                 type="text"
                 value={newCategoryInput}
