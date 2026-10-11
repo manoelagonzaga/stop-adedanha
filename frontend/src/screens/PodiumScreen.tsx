@@ -60,9 +60,8 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
 
   return (
     <div
-      className={`flex flex-col items-center transition-all duration-700 ${
-        visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
-      }`}
+      className={`flex flex-col items-center transition-all duration-700 ${visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
+        }`}
       style={{ order: cfg.order }}
     >
       {/* Crown for 1st */}
@@ -84,7 +83,7 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
         <span className="block max-w-[120px] truncate text-sm font-black text-slate-900 drop-shadow">
           {item.nickname}
         </span>
-        <span className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-slate-500">
+        <span aria-label={`${item.score} pontos`} className="mt-0.5 block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-black text-slate-500">
           {item.score} pts
         </span>
       </div>
@@ -93,7 +92,7 @@ function PodiumColumn({ item }: { item: PodiumItem }) {
       <div
         className={`mt-3 flex w-28 items-center justify-center rounded-t-2xl bg-gradient-to-b ${cfg.bg} ${cfg.height} shadow-lg`}
       >
-        <span className="text-2xl font-black text-slate-900">{item.position}º</span>
+        <span aria-label={`${item.position}º lugar`} className="text-2xl font-black text-slate-900">{item.position}º</span>
       </div>
     </div>
   );
@@ -145,9 +144,8 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
       {/* Remaining Players List */}
       {results.list.length > 0 && (
         <div
-          className={`mt-10 w-full max-w-lg transition-all duration-700 ${
-            showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-          }`}
+          className={`mt-10 w-full max-w-lg transition-all duration-700 ${showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+            }`}
         >
           <h2 className="mb-3 text-center text-xs font-black uppercase tracking-widest text-slate-500">
             Demais Participantes
@@ -158,20 +156,19 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
               return (
                 <div
                   key={item.playerId}
-                  className={`flex items-center justify-between px-5 py-3 ${
-                    idx < results.list.length - 1 ? 'border-b border-white/10' : ''
-                  } ${isMe ? 'bg-indigo-500/20' : ''}`}
+                  className={`flex items-center justify-between px-5 py-3 ${idx < results.list.length - 1 ? 'border-b border-white/10' : ''
+                    } ${isMe ? 'bg-indigo-500/20' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-black text-slate-900">
                       {item.position}º
                     </span>
-                    <span className="text-xl">{item.avatar ?? getAvatar(item.playerId)}</span>
+                    <span aria-hidden="true" className="text-xl">{item.avatar ?? getAvatar(item.playerId)}</span>
                     <span className="text-sm font-bold text-slate-900">
                       {item.nickname} {isMe && <span className="text-indigo-300">(Você)</span>}
                     </span>
                   </div>
-                  <span className="text-sm font-black text-slate-500">{item.score} pts</span>
+                  <span aria-label={`${item.score} pontos`} className="text-sm font-black text-slate-500">{item.score} pts</span>
                 </div>
               );
             })}
@@ -181,16 +178,15 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
 
       {/* Action buttons */}
       <div
-        className={`mt-10 flex flex-col items-center gap-3 sm:flex-row transition-all duration-700 delay-300 ${
-          showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-        }`}
+        className={`mt-10 flex flex-col items-center gap-3 sm:flex-row transition-all duration-700 delay-300 ${showList ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+          }`}
       >
         <button
           type="button"
           onClick={onPlayAgain}
           className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black font-bold text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95"
         >
-          <span className="material-symbols-outlined">replay</span>
+          <span aria-hidden="true" className="material-symbols-outlined">replay</span>
           Jogar Novamente
         </button>
         <button
@@ -198,7 +194,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
           onClick={onBackToHome}
           className="flex items-center gap-2 rounded-2xl border border-white/20 bg-rose-600 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
         >
-          <span className="material-symbols-outlined">home</span>
+          <span aria-hidden="true" className="material-symbols-outlined">home</span>
           Voltar ao Início
         </button>
       </div>
