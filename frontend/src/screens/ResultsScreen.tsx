@@ -109,11 +109,10 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
                         type="button"
                         aria-pressed={ownVote === decision}
                         onClick={() => onVote(roundId, category.id, answer.playerId, decision)}
-                        className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
-                          ownVote === decision
+                        className={`rounded-lg px-3 py-2 text-xs font-bold transition ${ownVote === decision
                             ? 'bg-indigo-600 text-white'
                             : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         {decision === 'valid' ? 'Válida' : 'Invalidar'}
                       </button>
@@ -142,15 +141,14 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound }
             {ranking.map((player: Player, index) => (
               <li
                 key={player.id}
-                className={`flex items-center justify-between rounded-xl p-3 ${
-                  player.id === myPlayerId ? 'border border-amber-200 bg-amber-50' : 'bg-slate-50'
-                }`}
+                className={`flex items-center justify-between rounded-xl p-3 ${player.id === myPlayerId ? 'border border-amber-200 bg-amber-50' : 'bg-slate-50'
+                  }`}
               >
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-800">
                   {index + 1}. <span aria-hidden="true" className="text-xl">{player.avatar ?? AVATAR_OPTIONS[0]}</span>
                   {player.nickname}{player.id === myPlayerId ? ' (Você)' : ''}
                 </span>
-                <span className="text-sm font-black text-slate-900">{player.score} pts</span>
+                <span aria-label={`${player.score} pontos`} className="text-sm font-black text-slate-900">{player.score} pts</span>
               </li>
             ))}
           </ol>
