@@ -19,6 +19,8 @@
     }
   ],
   "triggers": {
-    "crons": ["0 4 * * 0,2,4"]
+    // Cloudflare Quartz: weekdays are 1=SUN … 7=SAT (0 is invalid). Prefer day names.
+    // Sundays, Tuesdays and Thursdays at 04:00 UTC (01:00 BRT).
+    "crons": ["0 4 * * SUN,TUE,THU"]
   }
 }
