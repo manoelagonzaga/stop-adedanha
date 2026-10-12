@@ -164,7 +164,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
   const isPlaying = introPhase === 'playing';
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6" data-game-screen>
+    <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6" data-game-screen>
       {/* Screen reader announcements — aria-atomic ensures full re-read on change */}
       <div
         data-testid="live-region"
@@ -214,20 +214,20 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
       )}
 
       {/* Barra Superior da Rodada */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm md:flex-row md:p-6">
+      <div className="flex flex-col items-stretch justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-3 shadow-sm sm:items-center sm:gap-4 sm:p-4 md:flex-row md:p-6">
         {/* Info da Rodada */}
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 font-black text-xl text-indigo-600">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-lg font-black text-indigo-600 sm:h-12 sm:w-12 sm:text-xl">
             {room.currentRound}/{room.totalRounds}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-800">
                 Rodada Ativa
               </span>
               <span className="text-xs text-slate-400">Sala Privada #{room.code}</span>
             </div>
-            <h1 tabIndex={-1} className="text-xl font-black text-slate-900 outline-none md:text-2xl">
+            <h1 tabIndex={-1} className="text-lg font-black text-slate-900 outline-none sm:text-xl md:text-2xl">
               Rodada {room.currentRound} de {room.totalRounds}
             </h1>
           </div>
@@ -266,11 +266,11 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Coluna Esquerda: Digitação das Categorias + BOTÃO STOP APÓS AS CATEGORIAS */}
         <div className="space-y-4 lg:col-span-2">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <h2 className="flex items-center gap-2 text-base font-bold text-slate-800 sm:text-lg">
               <span aria-hidden="true" className="material-symbols-outlined text-indigo-600">edit_note</span>
               Preencha com a Letra{' '}
-              <span className="font-black text-xl text-indigo-600">{currentLetter}</span>
+              <span className="text-xl font-black text-indigo-600">{currentLetter}</span>
             </h2>
             <span aria-hidden="true" className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
               {filledCount} de {totalCategories} Preenchidas
@@ -282,20 +282,19 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             {room.categories.map((cat: Category, index: number) => {
               const val = answers[cat.id] || '';
               const isFilled = val.trim().length > 0;
-             // const startsWithLetter = val.trim().startsWith(currentLetter);
 
               return (
                 <div
                   key={cat.id}
-                  className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${isFilled
+                  className={`flex min-h-[52px] items-center gap-2 rounded-2xl border p-3 shadow-sm transition sm:gap-3 sm:p-3.5 ${isFilled
                     ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
                     : 'border-indigo-100 bg-white hover:border-slate-300'
                     } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
                 >
-                  <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
+                  <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
                     {index + 1}
                   </span>
-                  <span aria-hidden="true" className="w-28 shrink-0 truncate text-sm font-bold text-slate-800">
+                  <span aria-hidden="true" className="w-16 shrink-0 truncate text-xs font-bold text-slate-800 sm:w-28 sm:text-sm">
                     {cat.name}
                   </span>
                   <input
@@ -307,7 +306,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
                     disabled={isStopped || !isPlaying}
                     autoComplete="off"
                     aria-label={`${cat.name} com a letra ${currentLetter}`}
-                    className="game-field flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="game-field min-h-[44px] min-w-0 flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
               );
@@ -315,7 +314,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
           </form>
 
           {/* BOTÃO GIGANTE DE STOP — Posicionado após a sessão de categorias */}
-          <div className="mt-6 flex flex-col items-center justify-between gap-4 rounded-3xl border-2 border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 p-5 sm:flex-row">
+          <div className="mt-5 flex flex-col items-stretch justify-between gap-4 rounded-3xl border-2 border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 p-4 sm:mt-6 sm:flex-row sm:items-center sm:p-5">
             <div>
               <div className="flex items-center gap-1.5 text-sm font-black text-rose-600">
                 <span aria-hidden="true" className="material-symbols-outlined text-lg">bolt</span>
@@ -330,7 +329,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
               type="button"
               onClick={() => handleTriggerStop()}
               disabled={isStopped || !isPlaying}
-              className="animate-stop-btn flex min-h-[56px] items-center gap-3 rounded-2xl bg-rose-600 px-8 py-4 text-xl font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
+              className="animate-stop-btn flex min-h-[56px] w-full items-center justify-center gap-3 rounded-2xl bg-rose-600 px-6 py-4 text-lg font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50 sm:w-auto sm:px-8 sm:text-xl"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-3xl">pan_tool</span>
               Gritar STOP!

@@ -151,20 +151,20 @@ export function LobbyScreen({
 
   return (
     <div
-      className="mx-auto max-w-7xl px-4 py-8 md:px-6"
+      className="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-8 md:px-6"
       data-game-screen
       aria-busy={isSyncing || undefined}
     >
       {/* Topo do Lobby */}
-      <div className="flex flex-col items-start justify-between gap-4 border-b border-indigo-100 pb-6 sm:flex-row sm:items-center">
-        <div>
+      <div className="flex flex-col items-start justify-between gap-4 border-b border-indigo-100 pb-5 sm:flex-row sm:items-center sm:pb-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
               <span aria-hidden="true" className="material-symbols-outlined fill text-xs">star</span>
               {isHost ? 'VOCÊ É O HOST' : hasActiveHost ? 'CONVIDADO' : 'SEM ANFITRIÃO ATIVO'}
             </span>
           </div>
-          <h1 tabIndex={-1} className="mt-1 text-2xl font-black text-slate-900 outline-none md:text-3xl">
+          <h1 tabIndex={-1} className="mt-1 text-xl font-black text-slate-900 outline-none sm:text-2xl md:text-3xl">
             Sala Privada: <span className="text-indigo-600">#{room.code}</span>
           </h1>
           <p className="text-xs text-slate-500 md:text-sm">
@@ -178,11 +178,11 @@ export function LobbyScreen({
         </div>
 
         {/* Botões de Ação do Topo */}
-        <div className="flex flex-wrap w-full items-center gap-2.5 sm:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
           <button
             type="button"
             onClick={handleCopyLink}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:flex-initial"
           >
             <span aria-hidden="true" className="material-symbols-outlined text-lg">link</span>
             Copiar Link da Sala
@@ -191,7 +191,7 @@ export function LobbyScreen({
             <button
               type="button"
               onClick={onStartGame}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 active:scale-95 sm:flex-initial"
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 active:scale-95 sm:flex-initial"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-lg">play_arrow</span>
               Iniciar Partida
@@ -231,15 +231,15 @@ export function LobbyScreen({
         </p>
       )}
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-5 space-y-4 sm:mt-6 sm:space-y-6">
         {/* Card 1: Estrutura da Partida (Rodadas + Tempo) */}
-        <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
+        <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">tune</span>
               </span>
-              <h2 className="text-lg font-bold text-slate-800">Regras & Estrutura da Partida</h2>
+              <h2 className="text-base font-bold text-slate-800 sm:text-lg">Regras & Estrutura da Partida</h2>
             </div>
             <span className="text-xs font-medium text-slate-400">Ajuste o ritmo do jogo</span>
           </div>
@@ -258,7 +258,7 @@ export function LobbyScreen({
                     disabled={!canEditLobby}
                     aria-pressed={room.totalRounds === count}
                     onClick={() => handleSelectRounds(count)}
-                    className={`py-2 rounded-xl text-sm font-bold transition ${room.totalRounds === count
+                    className={`min-h-[44px] rounded-xl text-sm font-bold transition ${room.totalRounds === count
                       ? 'border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm'
                       : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
                       }`}
@@ -282,7 +282,7 @@ export function LobbyScreen({
                     disabled={!canEditLobby}
                     aria-pressed={roundTime === value}
                     onClick={() => handleSelectTime(value)}
-                    className={`py-2 rounded-xl text-sm font-bold transition ${roundTime === value
+                    className={`min-h-[44px] rounded-xl px-1 text-xs font-bold transition sm:text-sm ${roundTime === value
                       ? 'border-2 border-rose-500 bg-rose-500 text-white shadow-sm'
                       : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-rose-400'
                       }`}
@@ -296,27 +296,27 @@ export function LobbyScreen({
         </div>
 
         {/* Card 2: Categorias da Partida */}
-        <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-3 flex flex-wrap justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">category</span>
               </span>
               <div>
-                <h2 className="text-lg font-bold text-slate-800">Categorias da Partida</h2>
+                <h2 className="text-base font-bold text-slate-800 sm:text-lg">Categorias da Partida</h2>
                 <p className="text-xs text-slate-500">
                   Escolha de 1 a 20 categorias. Os nomes devem ser únicos e ter até 40 caracteres.
                 </p>
               </div>
             </div>
             {canEditLobby && (
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-medium text-slate-400">Packs:</span>
                 <button
                   type="button"
                   aria-pressed={selectedPack === 'classico'}
                   onClick={() => handleLoadPack('classico')}
-                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'classico' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                  className={`min-h-[44px] rounded-lg px-3 font-bold transition ${selectedPack === 'classico' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
                 >
                   Clássico
                 </button>
@@ -324,7 +324,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'geek'}
                   onClick={() => handleLoadPack('geek')}
-                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'geek' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  className={`min-h-[44px] rounded-lg px-3 font-bold transition ${selectedPack === 'geek' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                 >
                   Geek/Pop
                 </button>
@@ -332,7 +332,7 @@ export function LobbyScreen({
                   type="button"
                   aria-pressed={selectedPack === 'expert'}
                   onClick={() => handleLoadPack('expert')}
-                  className={`rounded-lg px-2.5 py-1 font-bold transition ${selectedPack === 'expert' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}
+                  className={`min-h-[44px] rounded-lg px-3 font-bold transition ${selectedPack === 'expert' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}
                 >
                   Expert 🌶️
                 </button>
@@ -341,11 +341,11 @@ export function LobbyScreen({
           </div>
 
           {/* Tags das Categorias Ativas */}
-          <div className="my-4 flex flex-wrap gap-2.5">
+          <div className="my-4 flex flex-wrap gap-2 sm:gap-2.5">
             {categoryNames.map((cat, index) => (
               <div
                 key={cat}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-100"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-100"
               >
                 <span className="font-extrabold text-indigo-600">
                   {(index + 1).toString().padStart(2, '0')}
@@ -355,8 +355,9 @@ export function LobbyScreen({
                   <button
                     type="button"
                     onClick={() => handleRemoveCategory(cat)}
-                    className="ml-1 text-slate-400 hover:text-rose-500 focus:outline-none"
+                    className="ml-1 inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-400 hover:text-rose-500 focus:outline-none"
                     title={`Remover ${cat}`}
+                    aria-label={`Remover ${cat}`}
                   >
                     <span aria-hidden="true" className="material-symbols-outlined text-sm">close</span>
                   </button>
@@ -367,7 +368,7 @@ export function LobbyScreen({
 
           {/* Adicionar Nova Categoria */}
           {canEditLobby && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-col items-stretch gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center">
               <input
                 type="text"
                 value={newCategoryInput}
@@ -380,12 +381,12 @@ export function LobbyScreen({
                   }
                 }}
                 placeholder="Criar categoria personalizada (ex: Vilão de Anime, Sobremesa)..."
-                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white"
+                className="min-h-[44px] w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base outline-none transition focus:border-indigo-500 focus:bg-white"
               />
               <button
                 type="button"
                 onClick={handleAddCustomCategory}
-                className="flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700"
+                className="flex min-h-[44px] items-center justify-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700"
               >
                 <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
                 Adicionar
@@ -395,13 +396,13 @@ export function LobbyScreen({
         </div>
 
         {/* Card 3: Letras Permitidas */}
-        <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2.5">
-              <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <span className="material-symbols-outlined text-lg">font_download</span>
               </span>
-              <h2 className="text-lg font-bold text-slate-800">Letras Permitidas na Partida</h2>
+              <h2 className="text-base font-bold text-slate-800 sm:text-lg">Letras Permitidas na Partida</h2>
             </div>
             {isHost && (
               <button
@@ -409,7 +410,7 @@ export function LobbyScreen({
                 onClick={handleToggleHardLetters}
                 disabled={!canEditLobby}
                 aria-pressed={hardLettersBlocked}
-                className="flex items-center gap-1 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                className="flex min-h-[44px] items-center gap-1 rounded-lg bg-rose-50 px-3 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
               >
                 <span aria-hidden="true" className="material-symbols-outlined text-sm">filter_alt</span>
                 {hardLettersBlocked ? 'Desbloquear Difíceis' : 'Bloquear Difíceis (K, W, Y, X, Z)'}
@@ -422,7 +423,7 @@ export function LobbyScreen({
               : 'Letras liberadas pelo anfitrião para sorteio.'}
           </p>
 
-          <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-9 md:grid-cols-13">
+          <div className="grid grid-cols-6 gap-2 sm:grid-cols-9 md:grid-cols-13">
             {ALL_LETTERS.map((letter) => {
               const isExcluded = excludedLetters.includes(letter);
               return (
@@ -432,7 +433,7 @@ export function LobbyScreen({
                   disabled={!canEditLobby}
                   aria-pressed={!isExcluded}
                   onClick={() => handleToggleLetter(letter)}
-                  className={`h-9 rounded-lg text-xs font-bold border transition ${isExcluded
+                  className={`min-h-[44px] rounded-lg text-sm font-bold border transition ${isExcluded
                     ? 'border-slate-200 bg-slate-100 text-slate-300 line-through'
                     : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400 hover:bg-indigo-50'
                     }`}
@@ -446,7 +447,7 @@ export function LobbyScreen({
 
         <section
           aria-labelledby="lobby-participants-heading"
-          className="mt-5 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
+          className="mt-5 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm sm:p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -496,7 +497,7 @@ export function LobbyScreen({
 
         {/* Card 4: Confirmação & Início (Apenas anfitrião) */}
         {canEditLobby && (
-          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-indigo-50 p-6 sm:flex-row">
+          <div className="flex flex-col items-stretch justify-between gap-4 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-indigo-50 p-4 sm:flex-row sm:items-center sm:p-6">
             <div>
               <h3 className="text-base font-bold text-slate-900">Tudo pronto para o jogo?</h3>
               <p className="text-xs text-slate-500">
@@ -507,7 +508,7 @@ export function LobbyScreen({
               type="button"
               onClick={onStartGame}
               disabled={!canStart}
-              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-95"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-95 disabled:opacity-50 sm:w-auto"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-xl">play_circle</span>
               Iniciar Partida Agora

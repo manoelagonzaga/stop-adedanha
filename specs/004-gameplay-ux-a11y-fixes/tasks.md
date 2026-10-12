@@ -47,6 +47,6 @@
 - [x] **T-6.4**: Atualizar testes em `frontend/src/screens/PodiumScreen.test.tsx`.
 
 ### Fase 7: Responsividade Mobile e Validação Final
-- [ ] **T-7.1**: Otimizar layouts e espaçamentos em Tailwind para telas de celular (320px a 480px) em todas as 5 telas do sistema.
-- [ ] **T-7.2**: Garantir área de toque mínima de 44x44px em todos os botões e tamanho de fonte de 16px em inputs móveis (prevenindo zoom indesejado no iOS).
-- [ ] **T-7.3**: Executar a suíte completa de testes no frontend (`npm test` em `frontend/`) e no backend (`npm test` em `backend/`) garantindo 100% de aprovação.
+- [x] **T-7.1**: Otimizar layouts e espaçamentos em Tailwind para telas de celular (320px a 480px) em todas as 5 telas do sistema.
+- [x] **T-7.2**: Garantir área de toque mínima de 44x44px em todos os botões e tamanho de fonte de 16px em inputs móveis (prevenindo zoom indesejado no iOS).
+- [x] **T-7.3**: Executar a suíte completa de testes no frontend (`npm test` em `frontend/`) e no backend (`npm test` em `backend/`) garantindo 100% de aprovação.

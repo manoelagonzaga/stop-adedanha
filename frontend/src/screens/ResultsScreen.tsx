@@ -45,16 +45,16 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6" data-game-screen>
-      <header className="mb-6 flex flex-col justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm md:flex-row md:items-center">
-        <div>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
+    <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6" data-game-screen>
+      <header className="mb-5 flex flex-col justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm sm:mb-6 sm:p-5 md:flex-row md:items-center">
+        <div className="min-w-0">
+          <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black text-amber-800 sm:text-xs">
             FASE DE VALIDAÇÃO · CATEGORIA {categoryIndex + 1}/{room.categories.length}
           </span>
           <h1
             ref={headingRef}
             tabIndex={-1}
-            className="mt-2 text-2xl font-black text-slate-900 outline-none"
+            className="mt-2 text-xl font-black text-slate-900 outline-none sm:text-2xl"
           >
             {room.phase === 'ROUND_RESULTS'
               ? `Resultados — Rodada ${room.currentRound} de ${room.totalRounds}`
@@ -65,7 +65,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
           </p>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:items-end">
           {room.reviewDeadline && room.phase === 'CATEGORY_REVIEW' && (
             <p className="text-sm font-semibold text-slate-500">
               Revisão desta categoria termina em{' '}
@@ -79,7 +79,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
               ref={nextCategoryBtnRef}
               type="button"
               onClick={onNextCategory}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-base">skip_next</span>
               Próxima Palavra / Categoria
@@ -112,16 +112,16 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
             return (
               <article
                 key={`${answer.playerId}:${answer.categoryId}`}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-500">
                       #{String(index + 1).padStart(2, '0')} · {player?.avatar ?? AVATAR_OPTIONS[0]}{' '}
                       {player?.nickname ?? 'Participante'}
                       {isAuthor ? ' (Você)' : ''}
                     </p>
-                    <p className="mt-2 text-2xl font-black text-slate-900">
+                    <p className="mt-2 break-words text-xl font-black text-slate-900 sm:text-2xl">
                       {value || <span className="text-slate-400">— Sem resposta —</span>}
                     </p>
                     {/* Validity indicator */}
@@ -131,7 +131,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
                       </p>
                     )}
                   </div>
-                  <div className="text-right text-xs font-semibold text-slate-500">
+                  <div className="text-left text-xs font-semibold text-slate-500 sm:text-right">
                     <p>{invalidVotes} voto(s) para invalidar</p>
                     <p>{eligibleVoters} votante(s) elegível(is)</p>
                   </div>
@@ -154,7 +154,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
                           ownVote === 'invalidate' ? 'valid' : 'invalidate',
                         )
                       }
-                      className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
+                      className={`min-h-[44px] rounded-lg px-4 text-sm font-bold transition ${
                         ownVote === 'invalidate'
                           ? 'bg-rose-600 text-white ring-2 ring-rose-400'
                           : 'border border-slate-200 bg-white text-slate-700 hover:bg-rose-50 hover:border-rose-300'
@@ -208,7 +208,7 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
             <button
               type="button"
               onClick={onNextRound}
-              className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"
+              className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"
             >
               Próxima Rodada
             </button>

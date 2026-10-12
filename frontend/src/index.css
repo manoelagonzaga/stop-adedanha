@@ -217,3 +217,12 @@ body {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* ── Mobile touch + iOS zoom prevention (320–480px) ── */
+@media (max-width: 480px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
