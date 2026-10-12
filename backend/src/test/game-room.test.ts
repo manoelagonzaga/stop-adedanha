@@ -1355,6 +1355,125 @@ describe('room allocation and identity', () => {
       }
     });
 
+    it('allows the active host to advance category review manually via round:review:next', async () => {
+      const { room, host, guest, started, hostEvents, guestEvents } = await startRound([
+        'Animal',
+        'Cidade',
+      ]);
+      const roomState = (room as unknown as {
+        room: { players: Array<{ id: string; isHost: boolean }>; categories: Array<{ id: string }> };
+      }).room;
+      const hostId = roomState.players.find((player) => player.isHost)!.id;
+      const guestId = roomState.players.find((player) => !player.isHost)!.id;
+      const [animal, city] = roomState.categories;
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'answer:submit',
+          requestId: 'submit-host-manual-review',
+          roundId: started.id,
+          answers: {
+            [animal.id]: `${started.letter}A`,
+            [city.id]: `${started.letter}C`,
+          },
+        }),
+      );
+      await nextEvent(hostEvents, 'command:ack');
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({
+          type: 'answer:submit',
+          requestId: 'submit-guest-manual-review',
+          roundId: started.id,
+          answers: {
+            [animal.id]: `${started.letter}B`,
+            [city.id]: `${started.letter}D`,
+          },
+        }),
+      );
+      await nextEvent(guestEvents, 'command:ack');
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'round:stop', requestId: 'stop-manual-review', roundId: started.id }),
+      );
+      expect(await nextEvent(hostEvents, 'round:review:category')).toMatchObject({ categoryIndex: 0 });
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+      expect(getRound(room).room.phase).toBe('CATEGORY_REVIEW');
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({
+          type: 'round:review:next',
+          requestId: 'guest-manual-review-next',
+          roundId: started.id,
+        }),
+      );
+      expect(await nextEvent(guestEvents, 'error')).toMatchObject({
+        code: 'NOT_HOST',
+        requestId: 'guest-manual-review-next',
+      });
+      expect(getRound(room).room.phase).toBe('CATEGORY_REVIEW');
+      expect(getRound(room).room.currentReviewCategoryIndex).toBe(0);
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'round:review:next',
+          requestId: 'host-manual-review-next-0',
+          roundId: started.id,
+        }),
+      );
+      const categoryZeroScore = await nextEvent(hostEvents, 'round:review:score_update');
+      const categoryOne = await nextEvent(hostEvents, 'round:review:category');
+      await nextEvent(guestEvents, 'round:review:score_update');
+      await nextEvent(guestEvents, 'round:review:category');
+      await nextEvent(hostEvents, 'command:ack');
+
+      expect(categoryZeroScore).toMatchObject({
+        categoryIndex: 0,
+        categoryScores: { [hostId]: 10, [guestId]: 10 },
+      });
+      expect(categoryOne).toMatchObject({ categoryIndex: 1, category: city });
+      expect(getRound(room).room.currentReviewCategoryIndex).toBe(1);
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'round:review:next',
+          requestId: 'host-manual-review-next-1',
+          roundId: started.id,
+        }),
+      );
+      const categoryOneScore = await nextEvent(hostEvents, 'round:review:score_update');
+      const results = await nextEvent(hostEvents, 'round:results');
+      await nextEvent(guestEvents, 'round:review:score_update');
+      await nextEvent(guestEvents, 'round:results');
+      await nextEvent(hostEvents, 'command:ack');
+
+      expect(categoryOneScore).toMatchObject({ categoryIndex: 1 });
+      expect(results.ranking).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: hostId }),
+        expect.objectContaining({ id: guestId }),
+      ]));
+      expect(getRound(room).room.phase).toBe('ROUND_RESULTS');
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({
+          type: 'round:review:next',
+          requestId: 'host-manual-review-after-results',
+          roundId: started.id,
+        }),
+      );
+      expect(await nextEvent(hostEvents, 'error')).toMatchObject({
+        code: 'INVALID_PHASE',
+        requestId: 'host-manual-review-after-results',
+      });
+    });
+
     it('allows only the host to advance results and rejects stale or repeated next-round requests', async () => {
       const { room, host, guest, started, hostEvents, guestEvents } = await startRound(['Animal']);
       const roomState = (room as unknown as {

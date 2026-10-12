@@ -52,13 +52,13 @@ export function LobbyScreen({
   const allowedLetters = room.allowedLetters ?? ALL_LETTERS;
   const excludedLetters = ALL_LETTERS.filter((letter) => !allowedLetters.includes(letter));
   const hardLettersBlocked = HARD_LETTERS.every((letter) => !allowedLetters.includes(letter));
-  const canEditLobby =
-    isHost &&
-    room.phase === 'CONFIGURING' &&
-    actionStatus?.status !== 'pending';
+  // Keep config controls enabled during pending sync so focus is not discarded to <body>.
+  const canEditLobby = isHost && room.phase === 'CONFIGURING';
+  const isSyncing = actionStatus?.status === 'pending';
   const activePlayers = room.players.filter((player) => player.status === 'active').length;
   const canStart =
     canEditLobby &&
+    !isSyncing &&
     activePlayers >= 2 &&
     categoryNames.length >= 1 &&
     categoryNames.length <= 20;
@@ -150,7 +150,11 @@ export function LobbyScreen({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 md:px-6" data-game-screen>
+    <div
+      className="mx-auto max-w-7xl px-4 py-8 md:px-6"
+      data-game-screen
+      aria-busy={isSyncing || undefined}
+    >
       {/* Topo do Lobby */}
       <div className="flex flex-col items-start justify-between gap-4 border-b border-indigo-100 pb-6 sm:flex-row sm:items-center">
         <div>
@@ -159,11 +163,6 @@ export function LobbyScreen({
               <span aria-hidden="true" className="material-symbols-outlined fill text-xs">star</span>
               {isHost ? 'VOCÊ É O HOST' : hasActiveHost ? 'CONVIDADO' : 'SEM ANFITRIÃO ATIVO'}
             </span>
-            {/* <span className="text-xs text-slate-400">•</span>
-            <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Estado atual recebido do servidor
-            </span> */}
           </div>
           <h1 tabIndex={-1} className="mt-1 text-2xl font-black text-slate-900 outline-none md:text-3xl">
             Sala Privada: <span className="text-indigo-600">#{room.code}</span>
@@ -197,7 +196,7 @@ export function LobbyScreen({
               <span aria-hidden="true" className="material-symbols-outlined text-lg">play_arrow</span>
               Iniciar Partida
             </button>
-          ) : actionStatus?.status === 'pending' ? (
+          ) : isSyncing ? (
             <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
               Salvando configurações…
             </span>
@@ -217,7 +216,7 @@ export function LobbyScreen({
         </div>
       </div>
 
-      {/* {actionStatus && (
+      {actionStatus && (
         <p
           role={actionStatus.status === 'rejected' ? 'alert' : 'status'}
           aria-live={actionStatus.status === 'rejected' ? 'assertive' : 'polite'}
@@ -230,7 +229,7 @@ export function LobbyScreen({
         >
           {actionStatus.message}
         </p>
-      )} */}
+      )}
 
       <div className="mt-6 space-y-6">
         {/* Card 1: Estrutura da Partida (Rodadas + Tempo) */}

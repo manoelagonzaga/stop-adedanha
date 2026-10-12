@@ -89,6 +89,53 @@ describe('LobbyScreen authoritative options', () => {
     expect(screen.getByRole('button', { name: 'A' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('reflects the selected category pack with aria-pressed', () => {
+    const onUpdateCategories = vi.fn();
+    const room: RoomState = {
+      code: 'ABC234',
+      phase: 'CONFIGURING',
+      players: [{ id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0 }],
+      categories: [{ id: 'cat-0', name: 'Nome' }],
+      currentRound: 0,
+      totalRounds: 5,
+    };
+
+    render(
+      <ToastProvider>
+        <LobbyScreen
+          room={room}
+          myPlayerId="host-1"
+          onUpdateCategories={onUpdateCategories}
+          onUpdateRounds={vi.fn()}
+          onUpdateOptions={vi.fn()}
+          onStartGame={vi.fn()}
+        />
+      </ToastProvider>,
+    );
+
+    const classic = screen.getByRole('button', { name: 'Clássico' });
+    const geek = screen.getByRole('button', { name: 'Geek/Pop' });
+    expect(classic).toHaveAttribute('aria-pressed', 'false');
+    expect(geek).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(classic);
+    expect(classic).toHaveAttribute('aria-pressed', 'true');
+    expect(geek).toHaveAttribute('aria-pressed', 'false');
+    expect(onUpdateCategories).toHaveBeenCalledWith([
+      'Nome',
+      'CEP / Lugar',
+      'Animal',
+      'Cor',
+      'Fruta / Comida',
+      'Objeto',
+      'Marca',
+    ]);
+
+    fireEvent.click(geek);
+    expect(geek).toHaveAttribute('aria-pressed', 'true');
+    expect(classic).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('suspends host controls and reports when no active host is present', () => {
     const room: RoomState = {
       code: 'ABC234',
@@ -122,11 +169,15 @@ describe('LobbyScreen authoritative options', () => {
     expect(screen.getByText('Aguardando um anfitrião ativo…')).toBeInTheDocument();
   });
 
-  it('shows pending, confirmed, and rejected command feedback explicitly', () => {
+  it('keeps configuration controls enabled and announces sync status without disabling focused buttons', () => {
+    const onUpdateRounds = vi.fn();
     const room: RoomState = {
       code: 'ABC234',
       phase: 'CONFIGURING',
-      players: [{ id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0 }],
+      players: [
+        { id: 'host-1', nickname: 'Host', isHost: true, status: 'active', score: 0 },
+        { id: 'guest-2', nickname: 'Guest', isHost: false, status: 'active', score: 0 },
+      ],
       categories: [{ id: 'cat-0', name: 'Nome' }],
       currentRound: 0,
       totalRounds: 5,
@@ -135,26 +186,37 @@ describe('LobbyScreen authoritative options', () => {
       room,
       myPlayerId: 'host-1',
       onUpdateCategories: vi.fn(),
-      onUpdateRounds: vi.fn(),
+      onUpdateRounds,
       onUpdateOptions: vi.fn(),
       onStartGame: vi.fn(),
     };
 
-    const { rerender } = render(
+    const { rerender, container } = render(
       <ToastProvider>
-        <LobbyScreen {...props} actionStatus={{ status: 'pending', message: 'Aguardando confirmação...' }} />
+        <LobbyScreen {...props} actionStatus={{ status: 'pending', message: 'Aguardando confirmação do servidor...' }} />
       </ToastProvider>,
     );
-    expect(screen.getByText('Aguardando confirmação...')).toHaveAttribute('role', 'status');
-    expect(screen.getByText('Aguardando confirmação do servidor…')).toBeInTheDocument();
-    expect(screen.queryByText(/Entre 2 jogadores ativos/)).not.toBeInTheDocument();
+
+    const pendingStatus = screen.getByText('Aguardando confirmação do servidor...');
+    expect(pendingStatus).toHaveAttribute('role', 'status');
+    expect(pendingStatus).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Salvando configurações…')).toBeInTheDocument();
+    expect(container.querySelector('[data-game-screen]')).toHaveAttribute('aria-busy', 'true');
+
+    const roundsButton = screen.getByRole('button', { name: '8' });
+    expect(roundsButton).not.toBeDisabled();
+    fireEvent.click(roundsButton);
+    expect(onUpdateRounds).toHaveBeenCalledWith(8);
 
     rerender(
       <ToastProvider>
         <LobbyScreen {...props} actionStatus={{ status: 'confirmed', message: 'Configuração salva.' }} />
       </ToastProvider>,
     );
-    expect(screen.getByText('Configuração salva.')).toHaveAttribute('role', 'status');
+    const confirmedStatus = screen.getByText('Configuração salva.');
+    expect(confirmedStatus).toHaveAttribute('role', 'status');
+    expect(confirmedStatus).toHaveAttribute('aria-live', 'polite');
+    expect(container.querySelector('[data-game-screen]')).not.toHaveAttribute('aria-busy');
 
     rerender(
       <ToastProvider>
@@ -162,5 +224,6 @@ describe('LobbyScreen authoritative options', () => {
       </ToastProvider>,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Configuração recusada.');
+    expect(screen.getByRole('alert')).toHaveAttribute('aria-live', 'assertive');
   });
 });
