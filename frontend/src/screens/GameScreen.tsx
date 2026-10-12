@@ -282,7 +282,7 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
             {room.categories.map((cat: Category, index: number) => {
               const val = answers[cat.id] || '';
               const isFilled = val.trim().length > 0;
-              const startsWithLetter = val.trim().startsWith(currentLetter);
+             // const startsWithLetter = val.trim().startsWith(currentLetter);
 
               return (
                 <div

@@ -143,7 +143,7 @@ describe('App server-backed screens', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Iniciar Partida$/ }));
     expect(JSON.parse(socket.sent[socket.sent.length - 1]).type).toBe('game:start');
-    expect(screen.getByText('Aguardando confirmação do servidor...')).toBeInTheDocument();
+    expect(screen.getByText('Salvando configurações…')).toBeInTheDocument();
 
     act(() => socket.emit({
       type: 'round:started',
@@ -154,6 +154,6 @@ describe('App server-backed screens', () => {
     }));
 
     expect(screen.getByRole('heading', { name: 'Rodada 1 de 3' })).toBeInTheDocument();
-    expect(screen.queryByText('Aguardando confirmação do servidor...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Salvando configurações…')).not.toBeInTheDocument();
   });
 });
