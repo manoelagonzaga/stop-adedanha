@@ -42,6 +42,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={onVote}
         onNextRound={vi.fn()}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
@@ -67,6 +69,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={onVote}
         onNextRound={vi.fn()}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
     expect(screen.getByText('Você não pode votar na própria resposta.')).toBeInTheDocument();
@@ -90,6 +94,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={onVote}
         onNextRound={vi.fn()}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
@@ -111,6 +117,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={vi.fn()}
         onNextRound={vi.fn()}
         onNextCategory={onNextCategory}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
@@ -136,6 +144,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={vi.fn()}
         onNextRound={vi.fn()}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
@@ -159,6 +169,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={vi.fn()}
         onNextRound={onNextRound}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
@@ -174,6 +186,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={vi.fn()}
         onNextRound={onNextRound}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Próxima Rodada' })).not.toBeInTheDocument();
@@ -196,6 +210,8 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={vi.fn()}
         onNextRound={vi.fn()}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
@@ -221,10 +237,51 @@ describe('ResultsScreen authoritative voting', () => {
         onVote={vi.fn()}
         onNextRound={vi.fn()}
         onNextCategory={vi.fn()}
+        onLeaveRoom={vi.fn()}
+        onCloseRoom={vi.fn()}
       />,
     );
 
     expect(screen.queryByRole('button', { name: /Invalidar/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Invalidada por você/ })).not.toBeInTheDocument();
+  });
+
+  it('shows Encerrar sala only for the host and confirms match close before calling onCloseRoom', () => {
+    const onLeaveRoom = vi.fn();
+    const onCloseRoom = vi.fn();
+    const { unmount } = render(
+      <ResultsScreen
+        room={room}
+        myPlayerId="author-1"
+        answers={[answer]}
+        onVote={vi.fn()}
+        onNextRound={vi.fn()}
+        onNextCategory={vi.fn()}
+        onLeaveRoom={onLeaveRoom}
+        onCloseRoom={onCloseRoom}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar sala' }));
+    expect(screen.getByRole('dialog', { name: 'Encerrar a partida agora?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar e ver pódio' }));
+    expect(onCloseRoom).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(
+      <ResultsScreen
+        room={room}
+        myPlayerId="voter-2"
+        answers={[answer]}
+        onVote={vi.fn()}
+        onNextRound={vi.fn()}
+        onNextCategory={vi.fn()}
+        onLeaveRoom={onLeaveRoom}
+        onCloseRoom={onCloseRoom}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Encerrar sala' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(onLeaveRoom).toHaveBeenCalledTimes(1);
   });
 });

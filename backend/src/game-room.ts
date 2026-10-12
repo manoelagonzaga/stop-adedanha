@@ -59,6 +59,22 @@ const HOST_ONLY_COMMANDS = new Set<ClientCommand['type']>([
   'game:start',
   'round:next',
   'round:review:next',
+  'room:close',
+]);
+
+/** Phases where room:leave / room:close are accepted (multi-phase; not in MUTATION_PHASES). */
+const ROOM_LIFECYCLE_PHASES = new Set<GamePhase>([
+  'WAITING_PLAYERS',
+  'CONFIGURING',
+  'ROUND_ACTIVE',
+  'CATEGORY_REVIEW',
+  'ROUND_RESULTS',
+]);
+
+const MATCH_PHASES = new Set<GamePhase>([
+  'ROUND_ACTIVE',
+  'CATEGORY_REVIEW',
+  'ROUND_RESULTS',
 ]);
 
 function isAvatar(value: unknown): value is Avatar {
@@ -492,6 +508,10 @@ export class GameRoom implements DurableObject {
         return this.handleRoundNext(socket, playerId, cmd);
       case 'round:review:next':
         return this.handleRoundReviewNext(socket, playerId, cmd);
+      case 'room:leave':
+        return this.handleRoomLeave(socket, playerId, cmd);
+      case 'room:close':
+        return this.handleRoomClose(socket, playerId, cmd);
       default:
         this.sendError(socket, 'UNKNOWN_COMMAND', 'Unknown command type', cmd.requestId);
     }
@@ -1292,6 +1312,119 @@ export class GameRoom implements DurableObject {
     await this.completeCategoryReview(roundData, this.room.currentReviewCategoryIndex ?? 0);
   }
 
+  private async handleRoomClose(
+    socket: WebSocket,
+    playerId: string,
+    cmd: Extract<ClientCommand, { type: 'room:close' }>,
+  ): Promise<void> {
+    // Authority already validated in validateMutationAuthority (host + lifecycle phase).
+
+    // In-match close: finalize with accumulated scores and show the podium.
+    if (MATCH_PHASES.has(this.room.phase)) {
+      this.room.roundDeadline = undefined;
+      this.room.reviewDeadline = undefined;
+      await this.state.storage.deleteAlarm();
+      await this.finishGame();
+      // Ack via outer processCommand; clients navigate on game:final_results.
+      return;
+    }
+
+    // Lobby close: delete the draft room for everyone.
+    this.broadcast({
+      type: 'room:closed',
+      reason: 'host_closed',
+      requestId: cmd.requestId,
+    });
+    // Ack before purge closes sockets; suppress the outer processCommand ack.
+    this.sendTo(socket, {
+      type: 'command:ack',
+      requestId: cmd.requestId,
+      commandType: 'room:close',
+      status: 'committed',
+    });
+    this.failedRequests.add(this.requestKey(playerId, cmd.requestId));
+    await this.purge({ closeCode: 1000, closeReason: 'Room closed by host' });
+  }
+
+  private async handleRoomLeave(
+    socket: WebSocket,
+    playerId: string,
+    cmd: Extract<ClientCommand, { type: 'room:leave' }>,
+  ): Promise<void> {
+    const player = this.room.players.find((entry) => entry.id === playerId);
+    if (!player || player.status !== 'active') {
+      this.sendError(socket, 'NOT_ELIGIBLE', 'Apenas jogadores ativos podem sair da sala', cmd.requestId);
+      return;
+    }
+
+    const wasHost = player.isHost;
+    this.room.players = this.room.players.filter((entry) => entry.id !== playerId);
+    await this.clearResumeCredentialsForPlayer(playerId);
+
+    if (wasHost) {
+      this.ensureActiveHost();
+    }
+
+    await this.persistRoom();
+    this.broadcastRoomState();
+
+    const outcome = await this.evaluateRoomAfterLeave();
+    if (outcome === 'purge_empty') {
+      this.broadcast({
+        type: 'room:closed',
+        reason: 'empty',
+        requestId: cmd.requestId,
+      });
+      this.sendTo(socket, {
+        type: 'command:ack',
+        requestId: cmd.requestId,
+        commandType: 'room:leave',
+        status: 'committed',
+      });
+      this.failedRequests.add(this.requestKey(playerId, cmd.requestId));
+      await this.purge({ closeCode: 1000, closeReason: 'Room empty' });
+    }
+    // 'finish' and 'continue' rely on the outer processCommand ack.
+  }
+
+  /**
+   * After a hard leave, decide whether the lobby should be purged or the match
+   * finished early. Soft-disconnect must NOT call this (see webSocketClose).
+   */
+  private async evaluateRoomAfterLeave(): Promise<'continue' | 'finish' | 'purge_empty'> {
+    const activeCount = this.room.players.filter((player) => player.status === 'active').length;
+
+    if (
+      (this.room.phase === 'CONFIGURING' || this.room.phase === 'WAITING_PLAYERS') &&
+      activeCount === 0
+    ) {
+      return 'purge_empty';
+    }
+
+    if (MATCH_PHASES.has(this.room.phase)) {
+      if (activeCount === 0) {
+        return 'purge_empty';
+      }
+      if (activeCount <= 1) {
+        this.room.roundDeadline = undefined;
+        this.room.reviewDeadline = undefined;
+        await this.state.storage.deleteAlarm();
+        await this.finishGame();
+        return 'finish';
+      }
+    }
+
+    return 'continue';
+  }
+
+  private async clearResumeCredentialsForPlayer(playerId: string): Promise<void> {
+    const credentials = await this.state.storage.get<ResumeCredential[]>('resumeCredentials') ?? [];
+    const remaining = credentials.filter((entry) => entry.playerId !== playerId);
+    if (remaining.length !== credentials.length) {
+      await this.state.storage.put('resumeCredentials', remaining);
+    }
+  }
+
   private async handleRoundNext(
     socket: WebSocket,
     playerId: string,
@@ -1523,7 +1656,10 @@ export class GameRoom implements DurableObject {
     }
   }
 
-  public async purge(): Promise<void> {
+  public async purge(options?: { closeCode?: number; closeReason?: string }): Promise<void> {
+    const closeCode = options?.closeCode ?? 1001;
+    const closeReason = options?.closeReason ?? 'Manutenção periódica programada';
+
     await this.state.storage.deleteAlarm();
     await this.clearAllStorage();
 
@@ -1541,12 +1677,12 @@ export class GameRoom implements DurableObject {
     this.currentRoundData = null;
     this.requestIds.clear();
     this.requestIdOrder = [];
-    this.inFlightRequests.clear();
-    this.failedRequests.clear();
+    // Keep inFlightRequests / failedRequests until processCommand finishes so
+    // pre-purge acks (room:close / last leave) are not duplicated after sockets close.
 
     for (const socket of this.state.getWebSockets()) {
       try {
-        socket.close(1001, 'Manutenção periódica programada');
+        socket.close(closeCode, closeReason);
       } catch (error) {
         console.error('[GameRoom] Failed to close purged-room socket:', error);
       }
@@ -1664,6 +1800,24 @@ export class GameRoom implements DurableObject {
     playerId: string,
     cmd: ClientCommand,
   ): boolean {
+    // Lifecycle commands span multiple phases — validate outside MUTATION_PHASES.
+    if (cmd.type === 'room:leave' || cmd.type === 'room:close') {
+      const player = this.room.players.find((entry) => entry.id === playerId);
+      if (!player || player.status !== 'active') {
+        this.sendError(socket, 'NOT_ELIGIBLE', 'Um membro ativo da sala é necessário para esta ação', cmd.requestId);
+        return false;
+      }
+      if (cmd.type === 'room:close' && !player.isHost) {
+        this.sendError(socket, 'NOT_HOST', 'Apenas o anfitrião ativo pode encerrar a sala', cmd.requestId);
+        return false;
+      }
+      if (!ROOM_LIFECYCLE_PHASES.has(this.room.phase)) {
+        this.sendError(socket, 'INVALID_PHASE', 'Esta ação não é permitida durante a fase atual do jogo', cmd.requestId);
+        return false;
+      }
+      return true;
+    }
+
     const phase = MUTATION_PHASES[cmd.type];
     if (!phase) return true;
 

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import type { RoomState, Category } from '../types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { playStopSound } from '../utils/audio';
 
@@ -8,6 +9,9 @@ interface GameScreenProps {
   myPlayerId: string;
   onSubmitAnswers: (roundId: string, answers: Record<string, string>) => void;
   onStop: (roundId: string) => void;
+  onLeaveRoom: () => void;
+  onCloseRoom: () => void;
+  lifecycleBusy?: boolean;
 }
 
 type IntroPhase = 'spinning' | 'revealed' | 'countdown' | 'playing';
@@ -24,13 +28,47 @@ function accessibleDuration(totalSeconds: number): string {
   return `${secs} segundo${secs !== 1 ? 's' : ''} restantes`;
 }
 
-export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameScreenProps) {
+/** Shared letter card — rendered once for mobile (top) and once for desktop sidebar. */
+function LetterCard({ letter, className = '' }: { letter: string; className?: string }) {
+  return (
+    <div
+      data-testid="letter-card"
+      className={`flex flex-col items-center justify-center rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-purple-50 to-indigo-50 p-6 text-center shadow-sm ${className}`}
+    >
+      <span className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+        Letra Sorteada da Vez
+      </span>
+      <div
+        className="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-600 font-black text-5xl text-white shadow-xl shadow-indigo-300"
+        aria-label={`Letra sorteada: ${letter}`}
+      >
+        {letter}
+      </div>
+      <p className="mt-2 text-xs font-medium text-slate-500">
+        Preencha todas as categorias iniciando com a letra <strong>{letter}</strong>
+      </p>
+    </div>
+  );
+}
+
+export function GameScreen({
+  room,
+  myPlayerId,
+  onSubmitAnswers,
+  onStop,
+  onLeaveRoom,
+  onCloseRoom,
+  lifecycleBusy = false,
+}: GameScreenProps) {
   const { showToast } = useToast();
   const roundId = room.currentRoundId ?? `round-${room.currentRound}`;
+  const me = room.players.find((player) => player.id === myPlayerId);
+  const isHost = me?.isHost === true && me.status === 'active';
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [now, setNow] = useState(Date.now);
   const [isStopped, setIsStopped] = useState<boolean>(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const stopRequestedRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const firstInputRef = useRef<HTMLInputElement | null>(null);
@@ -94,8 +132,6 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
 
     if (countdownValue <= 0) {
       setIntroPhase('playing');
-      // Focus first input when game unlocks
-      requestAnimationFrame(() => firstInputRef.current?.focus());
       return;
     }
 
@@ -104,6 +140,12 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
     }, 1000);
     return () => clearTimeout(t);
   }, [introPhase, countdownValue]);
+
+  // Focus the first category field once gameplay unlocks (input must be enabled).
+  useLayoutEffect(() => {
+    if (introPhase !== 'playing' || isStopped) return;
+    firstInputRef.current?.focus();
+  }, [introPhase, isStopped, roundId]);
 
   // ── Round timer ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -165,6 +207,48 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
 
   return (
     <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6" data-game-screen>
+      <ConfirmDialog
+        open={closeDialogOpen}
+        title="Encerrar a partida agora?"
+        description="A partida será finalizada com a pontuação acumulada até aqui e o pódio será exibido para todos."
+        confirmLabel="Encerrar e ver pódio"
+        cancelLabel="Cancelar"
+        tone="danger"
+        busy={lifecycleBusy}
+        onConfirm={() => {
+          setCloseDialogOpen(false);
+          onCloseRoom();
+        }}
+        onCancel={() => {
+          if (!lifecycleBusy) setCloseDialogOpen(false);
+        }}
+      />
+
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onLeaveRoom}
+          disabled={lifecycleBusy}
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">logout</span>
+          Sair
+        </button>
+        {isHost && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!lifecycleBusy) setCloseDialogOpen(true);
+            }}
+            disabled={lifecycleBusy}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">flag</span>
+            Encerrar sala
+          </button>
+        )}
+      </div>
+
       {/* Screen reader announcements — aria-atomic ensures full re-read on change */}
       <div
         data-testid="live-region"
@@ -213,225 +297,203 @@ export function GameScreen({ room, myPlayerId, onSubmitAnswers, onStop }: GameSc
         </div>
       )}
 
-      {/* Barra Superior da Rodada */}
-      <div className="flex flex-col items-stretch justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-3 shadow-sm sm:items-center sm:gap-4 sm:p-4 md:flex-row md:p-6">
-        {/* Info da Rodada */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-lg font-black text-indigo-600 sm:h-12 sm:w-12 sm:text-xl">
-            {room.currentRound}/{room.totalRounds}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-800">
-                Rodada Ativa
-              </span>
-              <span className="text-xs text-slate-400">Sala Privada #{room.code}</span>
-            </div>
-            <h1 tabIndex={-1} className="text-lg font-black text-slate-900 outline-none sm:text-xl md:text-2xl">
-              Rodada {room.currentRound} de {room.totalRounds}
-            </h1>
-          </div>
-        </div>
+      {/*
+        Playable layout order (DOM = reading/focus order on mobile):
+        1) Letter card (lg:hidden)
+        2) Round bar
+        3) Categories + STOP | sidebar letter (hidden lg:block) + scoreboard
+      */}
+      <div data-testid="game-play-layout" className="flex flex-col gap-6">
+        <LetterCard letter={currentLetter} className="lg:hidden" />
 
-        {/* Cronômetro Decrescente */}
+        {/* Barra Superior da Rodada */}
         <div
-          data-testid="timer-display"
-          className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
-            }`}
-          aria-label={timeLeft === null ? 'Sem limite de tempo' : accessibleDuration(timeLeft)}
+          data-testid="round-bar"
+          className="flex flex-col items-stretch justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-3 shadow-sm sm:items-center sm:gap-4 sm:p-4 md:flex-row md:p-6"
         >
-          <div className="relative flex h-10 w-10 items-center justify-center">
-            <span aria-hidden="true" className={`material-symbols-outlined text-2xl ${timeLeft !== null && timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
-              }`}>
-              timelapse
-            </span>
-          </div>
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Tempo Restante
-            </span>
-            {/* Visual mm:ss is aria-hidden; accessible label is on the parent container */}
-            <span
-              aria-hidden="true"
-              className={`text-2xl font-black tracking-tight ${timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
-                }`}
-            >
-              {timeLeft === null ? 'Sem limite' : `${minutes}:${seconds}`}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid Principal: 2 Colunas */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Coluna Esquerda: Digitação das Categorias + BOTÃO STOP APÓS AS CATEGORIAS */}
-        <div className="space-y-4 lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <h2 className="flex items-center gap-2 text-base font-bold text-slate-800 sm:text-lg">
-              <span aria-hidden="true" className="material-symbols-outlined text-indigo-600">edit_note</span>
-              Preencha com a Letra{' '}
-              <span className="text-xl font-black text-indigo-600">{currentLetter}</span>
-            </h2>
-            <span aria-hidden="true" className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-              {filledCount} de {totalCategories} Preenchidas
-            </span>
-          </div>
-
-          {/* Lista de Campos das Categorias */}
-          <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="space-y-3">
-            {room.categories.map((cat: Category, index: number) => {
-              const val = answers[cat.id] || '';
-              const isFilled = val.trim().length > 0;
-
-              return (
-                <div
-                  key={cat.id}
-                  className={`flex min-h-[52px] items-center gap-2 rounded-2xl border p-3 shadow-sm transition sm:gap-3 sm:p-3.5 ${isFilled
-                    ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
-                    : 'border-indigo-100 bg-white hover:border-slate-300'
-                    } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
-                >
-                  <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
-                    {index + 1}
-                  </span>
-                  <span aria-hidden="true" className="w-16 shrink-0 truncate text-xs font-bold text-slate-800 sm:w-28 sm:text-sm">
-                    {cat.name}
-                  </span>
-                  <input
-                    type="text"
-                    ref={index === 0 ? firstInputRef : undefined}
-                    value={val}
-                    onChange={(e) => handleInputChange(cat.id, e.target.value)}
-                    placeholder={`${cat.name} com a letra ${currentLetter}...`}
-                    disabled={isStopped || !isPlaying}
-                    autoComplete="off"
-                    aria-label={`${cat.name} com a letra ${currentLetter}`}
-                    className="game-field min-h-[44px] min-w-0 flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                </div>
-              );
-            })}
-          </form>
-
-          {/* BOTÃO GIGANTE DE STOP — Posicionado após a sessão de categorias */}
-          <div className="mt-5 flex flex-col items-stretch justify-between gap-4 rounded-3xl border-2 border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 p-4 sm:mt-6 sm:flex-row sm:items-center sm:p-5">
-            <div>
-              <div className="flex items-center gap-1.5 text-sm font-black text-rose-600">
-                <span aria-hidden="true" className="material-symbols-outlined text-lg">bolt</span>
-                COMPLETOU TUDO OU QUER ARRISCAR?
+          {/* Info da Rodada */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-lg font-black text-indigo-600 sm:h-12 sm:w-12 sm:text-xl">
+              {room.currentRound}/{room.totalRounds}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-800">
+                  Rodada Ativa
+                </span>
+                <span className="text-xs text-slate-400">Sala Privada #{room.code}</span>
               </div>
-              <p className="mt-0.5 text-xs text-slate-600">
-                Ao bater no STOP, o cronômetro trava na hora para todos os outros jogadores!
-              </p>
+              <h1 tabIndex={-1} className="text-lg font-black text-slate-900 outline-none sm:text-xl md:text-2xl">
+                Rodada {room.currentRound} de {room.totalRounds}
+              </h1>
             </div>
+          </div>
 
-            <button
-              type="button"
-              onClick={() => handleTriggerStop()}
-              disabled={isStopped || !isPlaying}
-              className="animate-stop-btn flex min-h-[56px] w-full items-center justify-center gap-3 rounded-2xl bg-rose-600 px-6 py-4 text-lg font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50 sm:w-auto sm:px-8 sm:text-xl"
-            >
-              <span aria-hidden="true" className="material-symbols-outlined text-3xl">pan_tool</span>
-              Gritar STOP!
-            </button>
+          {/* Cronômetro Decrescente */}
+          <div
+            data-testid="timer-display"
+            className={`flex items-center gap-3 rounded-2xl border px-5 py-2.5 transition-colors ${timeLeft !== null && timeLeft <= 10 ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
+              }`}
+            aria-label={timeLeft === null ? 'Sem limite de tempo' : accessibleDuration(timeLeft)}
+          >
+            <div className="relative flex h-10 w-10 items-center justify-center">
+              <span aria-hidden="true" className={`material-symbols-outlined text-2xl ${timeLeft !== null && timeLeft <= 10 ? 'animate-bounce text-rose-600' : 'animate-spin text-rose-500'
+                }`}>
+                timelapse
+              </span>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Tempo Restante
+              </span>
+              {/* Visual mm:ss is aria-hidden; accessible label is on the parent container */}
+              <span
+                aria-hidden="true"
+                className={`text-2xl font-black tracking-tight ${timeLeft !== null && timeLeft <= 10 ? 'text-rose-600' : 'text-slate-900'
+                  }`}
+              >
+                {timeLeft === null ? 'Sem limite' : `${minutes}:${seconds}`}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Coluna Direita: Letra Sorteada no Topo + Placar ao Vivo Abaixo */}
-        <div className="space-y-4">
-          {/* 1) Card da Letra Sorteada no Lado Direito */}
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-purple-50 to-indigo-50 p-6 text-center shadow-sm">
-            <span className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-              Letra Sorteada da Vez
-            </span>
-            <div
-              className="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-600 font-black text-5xl text-white shadow-xl shadow-indigo-300"
-              aria-label={`Letra sorteada: ${currentLetter}`}
-            >
-              {currentLetter}
-            </div>
-            <p className="mt-2 text-xs font-medium text-slate-500">
-              Preencha todas as categorias iniciando com a letra <strong>{currentLetter}</strong>
-            </p>
-          </div>
-
-          {/* 2) Placar / Classificação ao Vivo */}
-          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <span aria-hidden="true" className="material-symbols-outlined text-amber-500">leaderboard</span>
-                Classificação ao Vivo
-              </h3>
-              <span className="text-xs text-slate-400">Rodada {room.currentRound}</span>
+        {/* Grid Principal: categorias/STOP | letra (desktop) + placar */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Coluna principal: Digitação das Categorias + STOP */}
+          <div data-testid="categories-panel" className="space-y-4 lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <h2 className="flex items-center gap-2 text-base font-bold text-slate-800 sm:text-lg">
+                <span aria-hidden="true" className="material-symbols-outlined text-indigo-600">edit_note</span>
+                Preencha com a Letra{' '}
+                <span className="text-xl font-black text-indigo-600">{currentLetter}</span>
+              </h2>
+              <span aria-hidden="true" className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+                {filledCount} de {totalCategories} Preenchidas
+              </span>
             </div>
 
-            {/* Progresso dos Jogadores */}
-            <div className="mt-4 space-y-3">
-              {sortedPlayers.map((player, index) => {
-                const isMe = player.id === myPlayerId;
-                const playerProgress = isMe
-                  ? progressPercent
-                  : Math.min(100, Math.max(25, 80 - index * 18));
-                const playerFilled = isMe
-                  ? filledCount
-                  : Math.min(totalCategories, Math.max(1, totalCategories - index));
+            <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="space-y-3">
+              {room.categories.map((cat: Category, index: number) => {
+                const val = answers[cat.id] || '';
+                const isFilled = val.trim().length > 0;
 
                 return (
                   <div
-                    key={player.id}
-                    className={`rounded-xl p-3 transition ${isMe
-                      ? 'border border-indigo-200 bg-indigo-50/70'
-                      : 'border border-slate-100 bg-slate-50'
-                      }`}
+                    key={cat.id}
+                    className={`flex min-h-[52px] items-center gap-2 rounded-2xl border p-3 shadow-sm transition sm:gap-3 sm:p-3.5 ${isFilled
+                      ? 'border-indigo-200 bg-indigo-50/20 ring-1 ring-indigo-100'
+                      : 'border-indigo-100 bg-white hover:border-slate-300'
+                      } focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100`}
                   >
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{player.avatar ?? '🦊'}</span>
-                        <span className={isMe ? 'text-indigo-900' : 'text-slate-800'}>
-                          {player.nickname} {isMe && '(Você)'}
-                        </span>
-                      </div>
-                      <span className={isMe ? 'text-indigo-600' : 'text-slate-600'}>
-                        {player.score} pts
-                      </span>
-                    </div>
-
-                    {/* Barra de progresso do preenchimento */}
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${isMe ? 'bg-indigo-600' : index === 0 ? 'bg-amber-500' : 'bg-slate-400'
-                          }`}
-                        style={{ width: `${playerProgress}%` }}
-                      />
-                    </div>
-
-                    <div className="mt-1 flex items-center justify-between text-[10px] font-semibold text-slate-500">
-                      <span>
-                        {playerFilled} de {totalCategories} preenchidos
-                      </span>
-                      <span className={isMe ? 'text-indigo-700' : 'text-slate-500'}>
-                        {index + 1}º Lugar
-                      </span>
-                    </div>
+                    <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">
+                      {index + 1}
+                    </span>
+                    <span aria-hidden="true" className="w-16 shrink-0 truncate text-xs font-bold text-slate-800 sm:w-28 sm:text-sm">
+                      {cat.name}
+                    </span>
+                    <input
+                      type="text"
+                      ref={index === 0 ? firstInputRef : undefined}
+                      value={val}
+                      onChange={(e) => handleInputChange(cat.id, e.target.value)}
+                      placeholder={`${cat.name} com a letra ${currentLetter}...`}
+                      disabled={isStopped || !isPlaying}
+                      autoComplete="off"
+                      aria-label={`${cat.name} com a letra ${currentLetter}`}
+                      className="game-field min-h-[44px] min-w-0 flex-1 text-base font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
                   </div>
                 );
               })}
-            </div>
+            </form>
 
-            {/* Dicas de Teclado */}
-            <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-[11px] text-slate-400">
-              <span className="flex items-center gap-1 font-bold">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-700">
-                  TAB
-                </span>{' '}
-                Próximo
-              </span>
-              <span className="flex items-center gap-1 font-bold">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-700">
-                  ENTER
-                </span>{' '}
-                STOP!
-              </span>
+            <div className="mt-5 flex flex-col items-stretch justify-between gap-4 rounded-3xl border-2 border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50 to-rose-50 p-4 sm:mt-6 sm:flex-row sm:items-center sm:p-5">
+              <div>
+                <div className="flex items-center gap-1.5 text-sm font-black text-rose-600">
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">bolt</span>
+                  COMPLETOU TUDO OU QUER ARRISCAR?
+                </div>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  Ao bater no STOP, o cronômetro trava na hora para todos os outros jogadores!
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleTriggerStop()}
+                disabled={isStopped || !isPlaying}
+                className="animate-stop-btn flex min-h-[56px] w-full items-center justify-center gap-3 rounded-2xl bg-rose-600 px-6 py-4 text-lg font-black uppercase tracking-wider text-white shadow-xl shadow-rose-300 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50 sm:w-auto sm:px-8 sm:text-xl"
+              >
+                <span aria-hidden="true" className="material-symbols-outlined text-3xl">pan_tool</span>
+                Gritar STOP!
+              </button>
+            </div>
+          </div>
+
+          {/* Coluna lateral: letra (desktop) + placar */}
+          <div data-testid="sidebar-panel" className="space-y-4">
+            <LetterCard letter={currentLetter} className="hidden lg:flex" />
+
+            <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                  <span aria-hidden="true" className="material-symbols-outlined text-amber-500">leaderboard</span>
+                  Classificação ao Vivo
+                </h3>
+                <span className="text-xs text-slate-400">Rodada {room.currentRound}</span>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {sortedPlayers.map((player, index) => {
+                  const isMe = player.id === myPlayerId;
+                  const playerProgress = isMe
+                    ? progressPercent
+                    : Math.min(100, Math.max(25, 80 - index * 18));
+                  const playerFilled = isMe
+                    ? filledCount
+                    : Math.min(totalCategories, Math.max(1, totalCategories - index));
+
+                  return (
+                    <div
+                      key={player.id}
+                      className={`rounded-xl p-3 transition ${isMe
+                        ? 'border border-indigo-200 bg-indigo-50/70'
+                        : 'border border-slate-100 bg-slate-50'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{player.avatar ?? '🦊'}</span>
+                          <span className={isMe ? 'text-indigo-900' : 'text-slate-800'}>
+                            {player.nickname} {isMe && '(Você)'}
+                          </span>
+                        </div>
+                        <span className={isMe ? 'text-indigo-600' : 'text-slate-600'}>
+                          {player.score} pts
+                        </span>
+                      </div>
+
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${isMe ? 'bg-indigo-600' : index === 0 ? 'bg-amber-500' : 'bg-slate-400'
+                            }`}
+                          style={{ width: `${playerProgress}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-1 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                        <span>
+                          {playerFilled} de {totalCategories} preenchidos
+                        </span>
+                        <span className={isMe ? 'text-indigo-700' : 'text-slate-500'}>
+                          {index + 1}º Lugar
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

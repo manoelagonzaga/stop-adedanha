@@ -1,5 +1,6 @@
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { AVATAR_OPTIONS } from '../../../shared/types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { RoomState, Answer, Player, VoteDecision } from '../types';
 
 interface ResultsScreenProps {
@@ -9,11 +10,25 @@ interface ResultsScreenProps {
   onVote: (roundId: string, categoryId: string, answerPlayerId: string, decision: VoteDecision) => void;
   onNextRound: () => void;
   onNextCategory: () => void;
+  onLeaveRoom: () => void;
+  onCloseRoom: () => void;
+  lifecycleBusy?: boolean;
 }
 
-export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, onNextCategory }: ResultsScreenProps) {
+export function ResultsScreen({
+  room,
+  myPlayerId,
+  answers,
+  onVote,
+  onNextRound,
+  onNextCategory,
+  onLeaveRoom,
+  onCloseRoom,
+  lifecycleBusy = false,
+}: ResultsScreenProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const nextCategoryBtnRef = useRef<HTMLButtonElement>(null);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const categoryIndex = room.currentReviewCategoryIndex ?? 0;
   const category = room.categories[categoryIndex];
   const roundId = room.currentRoundId;
@@ -46,6 +61,48 @@ export function ResultsScreen({ room, myPlayerId, answers, onVote, onNextRound, 
 
   return (
     <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6" data-game-screen>
+      <ConfirmDialog
+        open={closeDialogOpen}
+        title="Encerrar a partida agora?"
+        description="A partida será finalizada com a pontuação acumulada até aqui e o pódio será exibido para todos."
+        confirmLabel="Encerrar e ver pódio"
+        cancelLabel="Cancelar"
+        tone="danger"
+        busy={lifecycleBusy}
+        onConfirm={() => {
+          setCloseDialogOpen(false);
+          onCloseRoom();
+        }}
+        onCancel={() => {
+          if (!lifecycleBusy) setCloseDialogOpen(false);
+        }}
+      />
+
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onLeaveRoom}
+          disabled={lifecycleBusy}
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">logout</span>
+          Sair
+        </button>
+        {isActiveHost && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!lifecycleBusy) setCloseDialogOpen(true);
+            }}
+            disabled={lifecycleBusy}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">flag</span>
+            Encerrar sala
+          </button>
+        )}
+      </div>
+
       <header className="mb-5 flex flex-col justify-between gap-3 rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm sm:mb-6 sm:p-5 md:flex-row md:items-center">
         <div className="min-w-0">
           <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black text-amber-800 sm:text-xs">

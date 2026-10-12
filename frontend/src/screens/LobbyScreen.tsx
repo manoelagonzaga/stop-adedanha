@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { RoomState, Category, Player } from '../types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 
 interface LobbyScreenProps {
@@ -9,11 +10,16 @@ interface LobbyScreenProps {
   onUpdateRounds: (totalRounds: number) => void;
   onUpdateOptions: (roundDurationSeconds: 0 | 60 | 90 | 120, allowedLetters: string[]) => void;
   onStartGame: () => void;
+  onLeaveRoom: () => void;
+  onCloseRoom: () => void;
+  lifecycleBusy?: boolean;
   actionStatus?: {
     status: 'pending' | 'confirmed' | 'rejected';
     message?: string;
   } | null;
 }
+
+type LobbyConfirmKind = 'discard-draft' | 'close-room';
 
 const CATEGORY_PACKS = {
   classico: ['Nome', 'CEP / Lugar', 'Animal', 'Cor', 'Fruta / Comida', 'Objeto', 'Marca'],
@@ -37,6 +43,9 @@ export function LobbyScreen({
   onUpdateRounds,
   onUpdateOptions,
   onStartGame,
+  onLeaveRoom,
+  onCloseRoom,
+  lifecycleBusy = false,
   actionStatus,
 }: LobbyScreenProps) {
   const { showToast } = useToast();
@@ -46,6 +55,7 @@ export function LobbyScreen({
 
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [selectedPack, setSelectedPack] = useState<'classico' | 'geek' | 'expert' | null>(null);
+  const [confirmKind, setConfirmKind] = useState<LobbyConfirmKind | null>(null);
 
   const categoryNames = room.categories.map((c: Category) => c.name);
   const roundTime = room.roundDurationSeconds ?? 60;
@@ -149,12 +159,65 @@ export function LobbyScreen({
     }
   }
 
+  function handleBackToHomeClick() {
+    if (lifecycleBusy) return;
+    if (isHost) {
+      setConfirmKind('discard-draft');
+      return;
+    }
+    onLeaveRoom();
+  }
+
+  function handleLeaveClick() {
+    if (lifecycleBusy) return;
+    onLeaveRoom();
+  }
+
+  function handleCloseClick() {
+    if (lifecycleBusy || !isHost) return;
+    setConfirmKind('close-room');
+  }
+
+  const confirmDialog =
+    confirmKind === 'discard-draft'
+      ? {
+          title: 'Descartar sala em rascunho?',
+          description:
+            'A sala de configuração será deletada. Convidados conectados serão enviados à tela inicial.',
+          confirmLabel: 'Encerrar e deletar',
+        }
+      : confirmKind === 'close-room'
+        ? {
+            title: 'Encerrar e deletar sala?',
+            description:
+              'Esta ação apaga a sala permanentemente. Todos os participantes serão desconectados e o código deixará de funcionar.',
+            confirmLabel: 'Encerrar e deletar',
+          }
+        : null;
+
   return (
     <div
       className="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-8 md:px-6"
       data-game-screen
-      aria-busy={isSyncing || undefined}
+      aria-busy={isSyncing || lifecycleBusy || undefined}
     >
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ''}
+        description={confirmDialog?.description ?? ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        cancelLabel="Cancelar"
+        tone="danger"
+        busy={lifecycleBusy}
+        onConfirm={() => {
+          setConfirmKind(null);
+          onCloseRoom();
+        }}
+        onCancel={() => {
+          if (!lifecycleBusy) setConfirmKind(null);
+        }}
+      />
+
       {/* Topo do Lobby */}
       <div className="flex flex-col items-start justify-between gap-4 border-b border-indigo-100 pb-5 sm:flex-row sm:items-center sm:pb-6">
         <div className="min-w-0">
@@ -179,6 +242,35 @@ export function LobbyScreen({
 
         {/* Botões de Ação do Topo */}
         <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
+          <button
+            type="button"
+            onClick={handleBackToHomeClick}
+            disabled={lifecycleBusy}
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 sm:flex-initial"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">arrow_back</span>
+            Voltar ao início
+          </button>
+          <button
+            type="button"
+            onClick={handleLeaveClick}
+            disabled={lifecycleBusy}
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 sm:flex-initial"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">logout</span>
+            Sair
+          </button>
+          {isHost && (
+            <button
+              type="button"
+              onClick={handleCloseClick}
+              disabled={lifecycleBusy}
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm transition hover:bg-rose-100 disabled:opacity-60 sm:flex-initial"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">delete</span>
+              Encerrar sala
+            </button>
+          )}
           <button
             type="button"
             onClick={handleCopyLink}

@@ -829,7 +829,7 @@ describe('room allocation and identity', () => {
           answers: Map<string, { value: string; isValid: boolean }>;
           stopperId: string | null;
         } | null;
-        room: { phase: string; roundDeadline?: number };
+        room: { phase: string; roundDeadline?: number; currentReviewCategoryIndex?: number };
       });
     }
 
@@ -2444,6 +2444,232 @@ describe('room allocation and identity', () => {
     expect(await nextEvent(events, 'error')).toMatchObject({
       code: 'ROOM_NOT_FOUND',
       requestId: 'join-unknown',
+    });
+  });
+
+  describe('room lifecycle leave and close', () => {
+    async function createLobbyWithGuest() {
+      const { state, persisted } = makeDurableObjectState();
+      const room = new GameRoom(state);
+      await allocate(room, 'ABC234');
+
+      const hostEvents: ServerEvent[] = [];
+      const host = await connect(room, 'ABC234', hostEvents);
+      await negotiate(room, host, hostEvents, 'hello-lifecycle-host');
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'room:create', requestId: 'create-lifecycle-host', nickname: 'Host' }),
+      );
+      await nextEvent(hostEvents, 'room:joined');
+      await nextEvent(hostEvents, 'room:state');
+      await nextEvent(hostEvents, 'command:ack');
+
+      const guestEvents: ServerEvent[] = [];
+      const guest = await connect(room, 'ABC234', guestEvents);
+      await negotiate(room, guest, guestEvents, 'hello-lifecycle-guest');
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({
+          type: 'room:join',
+          requestId: 'join-lifecycle-guest',
+          code: 'ABC234',
+          nickname: 'Guest',
+        }),
+      );
+      // join sends a direct room:state plus a broadcast room:state
+      await nextEvent(guestEvents, 'room:state');
+      await nextEvent(guestEvents, 'room:state');
+      await nextEvent(guestEvents, 'command:ack');
+      await nextEvent(hostEvents, 'room:state');
+
+      return { room, host, guest, hostEvents, guestEvents, state, persisted };
+    }
+
+    async function startMatchFromLobby(
+      room: GameRoom,
+      host: WebSocket,
+      guest: WebSocket,
+      hostEvents: ServerEvent[],
+      guestEvents: ServerEvent[],
+    ) {
+      room.webSocketMessage(host, JSON.stringify({ type: 'game:start', requestId: 'start-lifecycle' }));
+      const started = await nextEvent(hostEvents, 'round:started');
+      await nextEvent(guestEvents, 'round:started');
+      await nextEvent(hostEvents, 'command:ack');
+      return started;
+    }
+
+    it('allows the host to close the lobby and notifies all clients before purge', async () => {
+      const { room, host, guest, hostEvents, guestEvents, persisted } = await createLobbyWithGuest();
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'room:close', requestId: 'host-close-room' }),
+      );
+
+      expect(await nextEvent(hostEvents, 'room:closed')).toMatchObject({
+        type: 'room:closed',
+        reason: 'host_closed',
+        requestId: 'host-close-room',
+      });
+      expect(await nextEvent(guestEvents, 'room:closed')).toMatchObject({
+        reason: 'host_closed',
+        requestId: 'host-close-room',
+      });
+      expect(await nextEvent(hostEvents, 'command:ack')).toMatchObject({
+        requestId: 'host-close-room',
+        commandType: 'room:close',
+        status: 'committed',
+      });
+
+      expect(persisted.has('room')).toBe(false);
+      expect(persisted.has('gameState')).toBe(false);
+      expect((room as unknown as { room: RoomState }).room.players).toHaveLength(0);
+      expect((room as unknown as { room: RoomState }).room.code).toBe('');
+    });
+
+    it('finishes the match with game:final_results when the host closes during play', async () => {
+      const { room, host, guest, hostEvents, guestEvents, persisted } = await createLobbyWithGuest();
+      await startMatchFromLobby(room, host, guest, hostEvents, guestEvents);
+
+      // Give the host an accumulated score before early close.
+      (room as unknown as { room: RoomState }).room.players[0].score = 15;
+      (room as unknown as { room: RoomState }).room.players[1].score = 8;
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'room:close', requestId: 'host-close-match' }),
+      );
+
+      const hostFinal = await nextEvent(hostEvents, 'game:final_results');
+      const guestFinal = await nextEvent(guestEvents, 'game:final_results');
+      expect(hostFinal.podium.length + hostFinal.list.length).toBe(2);
+      expect(guestFinal.type).toBe('game:final_results');
+      expect(await nextEvent(hostEvents, 'command:ack')).toMatchObject({
+        requestId: 'host-close-match',
+        commandType: 'room:close',
+        status: 'committed',
+      });
+
+      expect(hostEvents.filter((event) => event.type === 'room:closed')).toHaveLength(0);
+      expect(guestEvents.filter((event) => event.type === 'room:closed')).toHaveLength(0);
+      expect((room as unknown as { room: RoomState }).room.phase).toBe('GAME_OVER');
+      expect(persisted.has('room')).toBe(true);
+      expect((room as unknown as { room: RoomState }).room.players).toHaveLength(2);
+    });
+
+    it('rejects room:close from a non-host with NOT_HOST', async () => {
+      const { room, guest, guestEvents } = await createLobbyWithGuest();
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({ type: 'room:close', requestId: 'guest-close-room' }),
+      );
+
+      expect(await nextEvent(guestEvents, 'error')).toMatchObject({
+        code: 'NOT_HOST',
+        requestId: 'guest-close-room',
+      });
+      expect((room as unknown as { room: RoomState }).room.phase).toBe('CONFIGURING');
+      expect((room as unknown as { room: RoomState }).room.players).toHaveLength(2);
+    });
+
+    it('removes a guest on room:leave and keeps the lobby for the host', async () => {
+      const { room, guest, hostEvents, guestEvents } = await createLobbyWithGuest();
+      const guestId = (room as unknown as { room: RoomState }).room.players
+        .find((player) => !player.isHost)!.id;
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({ type: 'room:leave', requestId: 'guest-leave-lobby' }),
+      );
+      await nextEvent(guestEvents, 'command:ack');
+
+      const hostState = await nextEvent(hostEvents, 'room:state');
+      expect(hostState.state.players.map((player) => player.id)).not.toContain(guestId);
+      expect(hostState.state.players).toHaveLength(1);
+      expect(hostState.state.players[0].isHost).toBe(true);
+      expect((room as unknown as { room: RoomState }).room.phase).toBe('CONFIGURING');
+    });
+
+    it('promotes a new host when the host leaves and guests remain', async () => {
+      const { room, host, hostEvents, guestEvents } = await createLobbyWithGuest();
+      const guestId = (room as unknown as { room: RoomState }).room.players
+        .find((player) => !player.isHost)!.id;
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'room:leave', requestId: 'host-leave-lobby' }),
+      );
+      await nextEvent(hostEvents, 'command:ack');
+
+      const guestState = await nextEvent(guestEvents, 'room:state');
+      expect(guestState.state.players).toHaveLength(1);
+      expect(guestState.state.players[0]).toMatchObject({ id: guestId, isHost: true, status: 'active' });
+      expect((room as unknown as { room: RoomState }).room.phase).toBe('CONFIGURING');
+    });
+
+    it('finishes the match with game:final_results when leave leaves a single active player', async () => {
+      const { room, host, guest, hostEvents, guestEvents } = await createLobbyWithGuest();
+      await startMatchFromLobby(room, host, guest, hostEvents, guestEvents);
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({ type: 'room:leave', requestId: 'guest-leave-match' }),
+      );
+      await nextEvent(guestEvents, 'command:ack');
+
+      const finalResults = await nextEvent(hostEvents, 'game:final_results');
+      expect(finalResults.podium.length + finalResults.list.length).toBeGreaterThanOrEqual(1);
+      expect((room as unknown as { room: RoomState }).room.phase).toBe('GAME_OVER');
+      expect((room as unknown as { room: RoomState }).room.players).toHaveLength(1);
+    });
+
+    it('purges the lobby when the last player leaves', async () => {
+      const { room, host, guest, hostEvents, guestEvents, persisted } = await createLobbyWithGuest();
+
+      room.webSocketMessage(
+        guest,
+        JSON.stringify({ type: 'room:leave', requestId: 'guest-leave-first' }),
+      );
+      await nextEvent(guestEvents, 'command:ack');
+      await nextEvent(hostEvents, 'room:state');
+
+      room.webSocketMessage(
+        host,
+        JSON.stringify({ type: 'room:leave', requestId: 'host-leave-last' }),
+      );
+
+      expect(await nextEvent(hostEvents, 'room:closed')).toMatchObject({
+        reason: 'empty',
+        requestId: 'host-leave-last',
+      });
+      expect(await nextEvent(hostEvents, 'command:ack')).toMatchObject({
+        requestId: 'host-leave-last',
+        commandType: 'room:leave',
+      });
+      expect(persisted.has('room')).toBe(false);
+      expect((room as unknown as { room: RoomState }).room.players).toHaveLength(0);
+    });
+
+    it('does not auto-finish the match on soft disconnect when one player remains active', async () => {
+      const { room, host, guest, hostEvents, guestEvents } = await createLobbyWithGuest();
+      await startMatchFromLobby(room, host, guest, hostEvents, guestEvents);
+
+      room.webSocketClose(guest);
+      await vi.waitFor(() => {
+        const players = (room as unknown as { room: RoomState }).room.players;
+        expect(players.find((player) => !player.isHost)?.status).toBe('disconnected');
+      });
+
+      expect((room as unknown as { room: RoomState }).room.phase).toBe('ROUND_ACTIVE');
+      expect((room as unknown as { room: RoomState }).room.players).toHaveLength(2);
+      expect(hostEvents.filter((event) => event.type === 'game:final_results')).toHaveLength(0);
+      expect(guestEvents.filter((event) => event.type === 'game:final_results')).toHaveLength(0);
+      // Presence update still happens for soft disconnect
+      await vi.waitFor(() => {
+        expect(hostEvents.some((event) => event.type === 'player:presence')).toBe(true);
+      });
     });
   });
 
