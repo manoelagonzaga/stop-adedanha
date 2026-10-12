@@ -2500,7 +2500,7 @@ describe('room allocation and identity', () => {
     }
 
     it('allows the host to close the lobby and notifies all clients before purge', async () => {
-      const { room, host, guest, hostEvents, guestEvents, persisted } = await createLobbyWithGuest();
+      const { room, host, hostEvents, guestEvents, persisted } = await createLobbyWithGuest();
 
       room.webSocketMessage(
         host,

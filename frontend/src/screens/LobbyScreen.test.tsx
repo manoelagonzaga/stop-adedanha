@@ -1,37 +1,41 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { ToastProvider } from '../components/Toast';
 import type { RoomState } from '../types';
 import { LobbyScreen } from './LobbyScreen';
 
 afterEach(cleanup);
 
+type LobbyTestProps = {
+  onUpdateCategories: Mock<(categories: string[]) => void>;
+  onUpdateRounds: Mock<(totalRounds: number) => void>;
+  onUpdateOptions: Mock<(roundDurationSeconds: 0 | 60 | 90 | 120, allowedLetters: string[]) => void>;
+  onStartGame: Mock<() => void>;
+  onLeaveRoom: Mock<() => void>;
+  onCloseRoom: Mock<() => void>;
+  lifecycleBusy?: boolean;
+  actionStatus?: {
+    status: 'pending' | 'confirmed' | 'rejected';
+    message?: string;
+  } | null;
+};
+
 function renderLobby(
   room: RoomState,
   myPlayerId: string,
-  overrides: Partial<{
-    onUpdateCategories: ReturnType<typeof vi.fn>;
-    onUpdateRounds: ReturnType<typeof vi.fn>;
-    onUpdateOptions: ReturnType<typeof vi.fn>;
-    onStartGame: ReturnType<typeof vi.fn>;
-    onLeaveRoom: ReturnType<typeof vi.fn>;
-    onCloseRoom: ReturnType<typeof vi.fn>;
-    lifecycleBusy: boolean;
-    actionStatus: {
-      status: 'pending' | 'confirmed' | 'rejected';
-      message?: string;
-    } | null;
-  }> = {},
+  overrides: Partial<LobbyTestProps> = {},
 ) {
   const props = {
     room,
     myPlayerId,
-    onUpdateCategories: overrides.onUpdateCategories ?? vi.fn(),
-    onUpdateRounds: overrides.onUpdateRounds ?? vi.fn(),
-    onUpdateOptions: overrides.onUpdateOptions ?? vi.fn(),
-    onStartGame: overrides.onStartGame ?? vi.fn(),
-    onLeaveRoom: overrides.onLeaveRoom ?? vi.fn(),
-    onCloseRoom: overrides.onCloseRoom ?? vi.fn(),
+    onUpdateCategories: overrides.onUpdateCategories ?? vi.fn<(categories: string[]) => void>(),
+    onUpdateRounds: overrides.onUpdateRounds ?? vi.fn<(totalRounds: number) => void>(),
+    onUpdateOptions:
+      overrides.onUpdateOptions
+      ?? vi.fn<(roundDurationSeconds: 0 | 60 | 90 | 120, allowedLetters: string[]) => void>(),
+    onStartGame: overrides.onStartGame ?? vi.fn<() => void>(),
+    onLeaveRoom: overrides.onLeaveRoom ?? vi.fn<() => void>(),
+    onCloseRoom: overrides.onCloseRoom ?? vi.fn<() => void>(),
     lifecycleBusy: overrides.lifecycleBusy,
     actionStatus: overrides.actionStatus,
   };
