@@ -113,20 +113,20 @@ export function EntryScreen({
   const isJoining = pendingAction === 'join';
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
+    <section className="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-8 md:px-6">
       {/* Hero Banner */}
-      <div className="mx-auto my-6 max-w-3xl text-center">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-4 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
+      <div className="mx-auto my-4 max-w-3xl text-center sm:my-6">
+        <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-700 sm:mb-4 sm:px-4 sm:text-xs">
           <span aria-hidden="true" className="material-symbols-outlined fill text-sm text-amber-500">bolt</span>
           Multiplayer em Tempo Real • A clássica Adedonha Turbo
         </div>
-        <h1 className="text-4xl font-black leading-tight tracking-tight text-slate-900 md:text-5xl lg:text-6xl">
+        <h1 className="text-3xl font-black leading-tight tracking-tight text-slate-900 sm:text-4xl md:text-5xl lg:text-6xl">
           Dedos ágeis, mentes rápidas: <br />
           <span className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-rose-600 bg-clip-text text-transparent">
             Grite STOP primeiro!
           </span>
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-base text-slate-600 md:text-lg">
+        <p className="mx-auto mt-3 max-w-xl text-base text-slate-600 sm:mt-4 md:text-lg">
           Desafie seus amigos no jogo de vocabulário mais frenético da internet. Crie sua sala privada ou digite o PIN de um amigo para começar.
         </p>
 
@@ -143,19 +143,19 @@ export function EntryScreen({
       </div>
 
       {/* Grid: Criar Sala vs Entrar */}
-      <div className="mx-auto mt-6 grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-2">
+      <div className="mx-auto mt-5 grid max-w-4xl grid-cols-1 gap-5 sm:mt-6 sm:gap-8 md:grid-cols-2">
         {/* Card 1: Criar Sala Privada */}
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-3xl border border-indigo-100 bg-white p-6 shadow-xl shadow-indigo-100/50 md:p-8">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-3xl border border-indigo-100 bg-white p-4 shadow-xl shadow-indigo-100/50 sm:p-6 md:p-8">
           <div className="pointer-events-none absolute top-0 right-0 -mr-10 -mt-10 h-32 w-32 rounded-full bg-indigo-50/60 blur-2xl" />
           
           <div>
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200" aria-hidden="true">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-2 sm:mb-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 sm:h-12 sm:w-12" aria-hidden="true">
                   <span className="material-symbols-outlined text-2xl">add_circle</span>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Criar Sala Privada</h2>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Criar Sala Privada</h2>
                   <p className="text-xs text-slate-500">Configure temas e convide seus amigos</p>
                 </div>
               </div>
@@ -221,13 +221,13 @@ export function EntryScreen({
             </div>
           </div>
 
-          <div className="mt-8 border-t border-slate-100 pt-4">
+          <div className="mt-6 border-t border-slate-100 pt-4 sm:mt-8">
             <button
               type="button"
               onClick={handleActionCreate}
               disabled={isCreating}
               aria-busy={isCreating}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg shadow-indigo-300/50 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-xl">rocket_launch</span>
               {isCreating ? 'Conectando à sala...' : 'Criar Sala e Convidar Amigos'}
@@ -240,17 +240,17 @@ export function EntryScreen({
         </div>
 
         {/* Card 2: Entrar em Sala Existente */}
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-3xl border border-rose-100 bg-white p-6 shadow-xl shadow-rose-100/40 md:p-8">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-3xl border border-rose-100 bg-white p-4 shadow-xl shadow-rose-100/40 sm:p-6 md:p-8">
           <div className="pointer-events-none absolute top-0 right-0 -mr-10 -mt-10 h-32 w-32 rounded-full bg-rose-50/50 blur-2xl" />
 
           <div>
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-lg shadow-rose-200">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-2 sm:mb-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-lg shadow-rose-200 sm:h-12 sm:w-12">
                   <span aria-hidden="true" className="material-symbols-outlined text-2xl">login</span>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Entrar em Sala</h2>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Entrar em Sala</h2>
                   <p className="text-xs text-slate-500">Tem o PIN ou link do seu amigo?</p>
                 </div>
               </div>
@@ -277,7 +277,7 @@ export function EntryScreen({
                     placeholder="Ex: Veloz99"
                     maxLength={24}
                     autoFocus={initialRoomCode !== null}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-4 pl-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-rose-500 focus:bg-white"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-4 pl-10 text-base font-semibold text-slate-800 outline-none transition focus:border-rose-500 focus:bg-white"
                   />
                 </div>
               </div>
@@ -320,7 +320,7 @@ export function EntryScreen({
                 <label htmlFor="room-pin-1" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Código da Sala (6 dígitos)
                 </label>
-                <div className="grid grid-cols-6 gap-2">
+                <div className="grid grid-cols-6 gap-1 sm:gap-2">
                   {pinDigits.map((digit, i) => (
                     <input
                       key={i}
@@ -334,16 +334,16 @@ export function EntryScreen({
                       onChange={(e) => handleDigitChange(i, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(i, e)}
                       onPaste={i === 0 ? (e) => handlePastePin(e) : undefined}
-                      className="aspect-square w-full rounded-xl border-2 border-slate-200 bg-slate-50 text-center text-lg font-black text-slate-900 uppercase outline-none transition focus:border-rose-500 focus:bg-white"
+                      className="aspect-square min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-slate-50 text-center text-base font-black text-slate-900 uppercase outline-none transition focus:border-rose-500 focus:bg-white sm:text-lg"
                     />
                   ))}
                 </div>
-                <div className="mt-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400">
+                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium text-slate-400">
                   <span>Informe o código de 6 caracteres</span>
                   <button
                     type="button"
                     onClick={() => handlePastePin()}
-                    className="font-bold text-rose-600 hover:underline"
+                    className="inline-flex min-h-[44px] items-center font-bold text-rose-600 hover:underline"
                   >
                     Colar link ou código
                   </button>
@@ -352,13 +352,13 @@ export function EntryScreen({
             </div>
           </div>
 
-          <div className="mt-8 border-t border-slate-100 pt-4">
+          <div className="mt-6 border-t border-slate-100 pt-4 sm:mt-8">
             <button
               type="button"
               onClick={handleActionJoin}
               disabled={isJoining}
               aria-busy={isJoining}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-base font-bold text-white shadow-lg shadow-rose-300/50 transition hover:bg-rose-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-base font-bold text-white shadow-lg shadow-rose-300/50 transition hover:bg-rose-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               <span aria-hidden="true" className="material-symbols-outlined text-xl">sports_esports</span>
               {isJoining ? 'Conectando à sala...' : 'Entrar no Jogo Agora'}
@@ -371,19 +371,19 @@ export function EntryScreen({
       </div>
 
       {/* Guia Rápido: Como Jogar STOP! Online */}
-      <div className="mx-auto mt-16 max-w-4xl">
-        <div className="mb-8 text-center">
+      <div className="mx-auto mt-10 max-w-4xl sm:mt-16">
+        <div className="mb-6 text-center sm:mb-8">
           <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-600">
             Fácil e Rápido de Aprender
           </span>
-          <h2 className="mt-2 text-2xl font-black text-slate-900 md:text-3xl">Como Jogar STOP! Online</h2>
+          <h2 className="mt-2 text-xl font-black text-slate-900 sm:text-2xl md:text-3xl">Como Jogar STOP! Online</h2>
           <p className="mt-1 text-sm text-slate-500">
             As clássicas regras do papel, otimizadas para partidas virtuais dinâmicas, justas e muito divertidas.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          <div className="rounded-2xl border border-indigo-50 bg-white p-5 shadow-md">
+        <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-3">
+          <div className="rounded-2xl border border-indigo-50 bg-white p-4 shadow-md sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-lg font-black text-indigo-600">
               01
             </div>
@@ -393,7 +393,7 @@ export function EntryScreen({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-amber-50 bg-white p-5 shadow-md">
+          <div className="rounded-2xl border border-amber-50 bg-white p-4 shadow-md sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-lg font-black text-amber-600">
               02
             </div>
@@ -403,7 +403,7 @@ export function EntryScreen({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-rose-50 bg-white p-5 shadow-md">
+          <div className="rounded-2xl border border-rose-50 bg-white p-4 shadow-md sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-lg font-black text-rose-600">
               03
             </div>

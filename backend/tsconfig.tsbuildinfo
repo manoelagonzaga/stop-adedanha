@@ -1,1 +1,1 @@
-{"root":["./src/game-room.ts","./src/index.ts","./src/domain/game-room.ts","../shared/types.ts"],"version":"5.9.3"}
+{"root":["./src/cleanup.ts","./src/game-room.ts","./src/index.ts","./src/scoring.ts","./src/types.ts","./src/domain/game-room.ts","./src/test/cleanup.test.ts","./src/test/contracts.test.ts","./src/test/game-room.test.ts","./src/test/scoring.test.ts","../shared/types.ts"],"version":"5.9.3"}

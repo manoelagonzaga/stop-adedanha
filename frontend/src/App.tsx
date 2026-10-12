@@ -44,8 +44,15 @@ export default function App() {
   const [lobbyActionStatus, setLobbyActionStatus] = useState<LobbyActionStatus | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const pendingCommandRef = useRef<(() => void) | null>(null);
   const pendingRoomRequestIdRef = useRef<string | null>(null);
+  const pendingLeaveRequestIdRef = useRef<string | null>(null);
+  const pendingCloseRequestIdRef = useRef<string | null>(null);
+  const lifecycleExitRef = useRef(false);
+  const roomCodeRef = useRef<string | null>(null);
+  const myPlayerIdRef = useRef<string | null>(null);
+  const handleBackToHomeRef = useRef<() => void>(() => undefined);
   const lobbyPendingRequestIds = useRef(new Map<string, ClientCommand['type']>());
   const lobbyRequestTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -58,6 +65,8 @@ export default function App() {
     roundDurationSeconds: 0 | 60 | 90 | 120;
     allowedLetters: string[];
   } | null>(null);
+
+  roomCodeRef.current = roomCode;
 
   useEffect(() => () => {
     for (const timeout of lobbyRequestTimeouts.current.values()) clearTimeout(timeout);
@@ -82,11 +91,57 @@ export default function App() {
 
   const onEvent = useCallback(
     (event: import('./types').ServerEvent) => {
+      // Room closed by host/empty purge — always return home, skip game-state transitions.
+      if (event.type === 'room:closed') {
+        handleBackToHomeRef.current();
+        return;
+      }
+
+      const isLifecycleLeaveAck =
+        event.type === 'command:ack' &&
+        event.commandType === 'room:leave' &&
+        event.requestId === pendingLeaveRequestIdRef.current;
+      const isLifecycleCloseAck =
+        event.type === 'command:ack' &&
+        event.commandType === 'room:close' &&
+        event.requestId === pendingCloseRequestIdRef.current;
+
+      if (isLifecycleLeaveAck) {
+        pendingLeaveRequestIdRef.current = null;
+        handleBackToHomeRef.current();
+        return;
+      }
+
+      // Close ack: lobby navigates via room:closed; match navigates via game:final_results.
+      if (isLifecycleCloseAck) {
+        pendingCloseRequestIdRef.current = null;
+        setLifecycleBusy(false);
+        return;
+      }
+
+      if (
+        event.type === 'error' &&
+        (event.requestId === pendingLeaveRequestIdRef.current ||
+          event.requestId === pendingCloseRequestIdRef.current)
+      ) {
+        pendingLeaveRequestIdRef.current = null;
+        pendingCloseRequestIdRef.current = null;
+        lifecycleExitRef.current = false;
+        setLifecycleBusy(false);
+        setCommandError(event.message);
+        // Still process via handleEvent below for lastCommandResult tracking.
+      }
+
       handleEvent(event);
       const lobbyCommandType =
         (event.type === 'command:ack' || event.type === 'error') && event.requestId
           ? lobbyPendingRequestIds.current.get(event.requestId)
           : undefined;
+
+      // While leaving/closing, ignore screen transitions that could flash podium/game.
+      if (lifecycleExitRef.current) {
+        return;
+      }
 
       // Drive screen transitions from server events
       if (event.type === 'room:state') {
@@ -106,7 +161,11 @@ export default function App() {
         setScreen('jogo');
       }
       if (event.type === 'round:review:category') setScreen('resultado');
-      if (event.type === 'game:final_results') setScreen('pódio');
+      if (event.type === 'game:final_results') {
+        // T-2.6: do not navigate to podium if client already left or has no local player.
+        if (!roomCodeRef.current || !myPlayerIdRef.current || lifecycleExitRef.current) return;
+        setScreen('pódio');
+      }
       if (event.type === 'session:resumed') setReconnectError(null);
       if (event.type === 'room:joined' || event.type === 'session:resumed') {
         pendingRoomRequestIdRef.current = null;
@@ -154,6 +213,8 @@ export default function App() {
         event.type === 'error' &&
         event.code !== 'SESSION_INVALID' &&
         event.requestId !== pendingRoomRequestIdRef.current &&
+        event.requestId !== pendingLeaveRequestIdRef.current &&
+        event.requestId !== pendingCloseRequestIdRef.current &&
         !lobbyCommandType
       ) {
         setCommandError(event.message);
@@ -371,6 +432,14 @@ export default function App() {
 
   /** Reset everything and return to home screen */
   function handleBackToHome() {
+    const activeRoomCode = roomCodeRef.current;
+    if (activeRoomCode) {
+      clearResumeToken(activeRoomCode);
+    }
+    lifecycleExitRef.current = false;
+    pendingLeaveRequestIdRef.current = null;
+    pendingCloseRequestIdRef.current = null;
+    setLifecycleBusy(false);
     setRoomCode(null);
     setReconnectError(null);
     setCommandError(null);
@@ -383,6 +452,40 @@ export default function App() {
     lobbyRequestTimeouts.current.clear();
     setState(createEmptyGameState());
     setScreen('início');
+  }
+
+  handleBackToHomeRef.current = handleBackToHome;
+
+  /** Leave the current room without deleting it (unless server rules purge/finish). */
+  function handleLeaveRoom() {
+    if (!roomCodeRef.current || lifecycleExitRef.current) return;
+    const requestId = crypto.randomUUID();
+    lifecycleExitRef.current = true;
+    setLifecycleBusy(true);
+    pendingLeaveRequestIdRef.current = requestId;
+    const sent = sendCommand({ type: 'room:leave', requestId });
+    if (!sent) {
+      lifecycleExitRef.current = false;
+      pendingLeaveRequestIdRef.current = null;
+      setLifecycleBusy(false);
+    }
+  }
+
+  /**
+   * Host-only close after UI confirmation.
+   * Lobby → room:closed + home; match → game:final_results + podium.
+   * Do not set lifecycleExitRef — that flag is only for leave (skip podium).
+   */
+  function handleCloseRoom() {
+    if (!roomCodeRef.current || lifecycleExitRef.current || pendingCloseRequestIdRef.current) return;
+    const requestId = crypto.randomUUID();
+    setLifecycleBusy(true);
+    pendingCloseRequestIdRef.current = requestId;
+    const sent = sendCommand({ type: 'room:close', requestId });
+    if (!sent) {
+      pendingCloseRequestIdRef.current = null;
+      setLifecycleBusy(false);
+    }
   }
 
   /** Create a new room keeping previous nickname/avatar and replicating room settings */
@@ -471,6 +574,7 @@ export default function App() {
 
   const room: RoomState | null = state.room;
   const myPlayerId = state.myPlayerId ?? '';
+  myPlayerIdRef.current = state.myPlayerId;
 
   useEffect(() => {
     if (room && myPlayerId) {
@@ -489,7 +593,8 @@ export default function App() {
   }, [room, myPlayerId]);
 
   useEffect(() => {
-    if (screen === 'início') return;
+    // GameScreen owns focus (first category input). Avoid stealing it via the h1.
+    if (screen === 'início' || screen === 'jogo') return;
     document.querySelector<HTMLElement>('[data-game-screen] h1')?.focus();
   }, [room?.currentReviewCategoryIndex, room?.currentRound, room?.phase, screen]);
 
@@ -589,6 +694,9 @@ export default function App() {
           onUpdateRounds={handleUpdateRounds}
           onUpdateOptions={handleUpdateOptions}
           onStartGame={handleStartGame}
+          onLeaveRoom={handleLeaveRoom}
+          onCloseRoom={handleCloseRoom}
+          lifecycleBusy={lifecycleBusy}
           actionStatus={lobbyActionStatus}
         />
       )}
@@ -599,6 +707,9 @@ export default function App() {
           myPlayerId={myPlayerId}
           onSubmitAnswers={handleSubmitAnswers}
           onStop={handleStop}
+          onLeaveRoom={handleLeaveRoom}
+          onCloseRoom={handleCloseRoom}
+          lifecycleBusy={lifecycleBusy}
         />
       )}
 
@@ -610,6 +721,9 @@ export default function App() {
           onVote={handleVote}
           onNextRound={handleNextRound}
           onNextCategory={handleNextCategory}
+          onLeaveRoom={handleLeaveRoom}
+          onCloseRoom={handleCloseRoom}
+          lifecycleBusy={lifecycleBusy}
         />
       )}
 

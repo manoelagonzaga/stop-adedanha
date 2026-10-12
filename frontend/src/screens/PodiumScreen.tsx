@@ -105,14 +105,14 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
   const winner = results.podium.find((p) => p.tier === 'gold');
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center px-4 py-8" data-game-screen>
+    <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center px-3 py-6 sm:px-4 sm:py-8" data-game-screen>
       {/* Header */}
       <div className="text-center">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500 backdrop-blur-sm">
           <span aria-hidden="true" className="material-symbols-outlined text-sm text-amber-400">emoji_events</span>
           Fim de Jogo
         </div>
-        <h1 tabIndex={-1} className="mt-1 text-4xl font-black text-slate-900 outline-none drop-shadow-lg md:text-5xl">
+        <h1 tabIndex={-1} className="mt-1 text-3xl font-black text-slate-900 outline-none drop-shadow-lg sm:text-4xl md:text-5xl">
           🏆 Pódio Final
         </h1>
         {winner && (
@@ -175,7 +175,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
         <button
           type="button"
           onClick={onPlayAgain}
-          className="flex min-h-[48px] w-full sm:w-auto items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 sm:px-8 py-3.5 sm:py-4 text-base font-black text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95"
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3.5 text-base font-black text-white shadow-xl shadow-indigo-900/50 transition hover:bg-indigo-500 active:scale-95 sm:min-h-[48px] sm:w-auto sm:px-8 sm:py-4"
         >
           <span aria-hidden="true" className="material-symbols-outlined">replay</span>
           Jogar Novamente
@@ -183,7 +183,7 @@ export function PodiumScreen({ results, myPlayerId, onPlayAgain, onBackToHome }:
         <button
           type="button"
           onClick={onBackToHome}
-          className="flex min-h-[48px] w-full sm:w-auto items-center justify-center gap-2 rounded-2xl border border-white/20 bg-rose-600 px-6 sm:px-8 py-3.5 sm:py-4 text-base font-bold text-white backdrop-blur-sm transition hover:bg-rose-700 active:scale-95"
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-rose-600 px-6 py-3.5 text-base font-bold text-white backdrop-blur-sm transition hover:bg-rose-700 active:scale-95 sm:min-h-[48px] sm:w-auto sm:px-8 sm:py-4"
         >
           <span aria-hidden="true" className="material-symbols-outlined">home</span>
           Voltar ao Início

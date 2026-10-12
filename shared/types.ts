@@ -122,7 +122,11 @@ export type ClientCommand =
       decision: VoteDecision;
     } & CommandRequest)
   | ({ type: 'round:next'; roundId: string } & CommandRequest)
-  | ({ type: 'round:review:next'; roundId: string } & CommandRequest);
+  | ({ type: 'round:review:next'; roundId: string } & CommandRequest)
+  | ({ type: 'room:leave' } & CommandRequest)
+  | ({ type: 'room:close' } & CommandRequest);
+
+export type RoomClosedReason = 'host_closed' | 'empty' | 'purged';
 
 // Server to Client Events
 export type ServerEvent =
@@ -146,6 +150,11 @@ export type ServerEvent =
       state: RoomState;
     }
   | { type: 'room:state'; state: RoomState }
+  | {
+      type: 'room:closed';
+      reason: RoomClosedReason;
+      requestId?: string;
+    }
   | {
       type: 'command:ack';
       requestId: string;

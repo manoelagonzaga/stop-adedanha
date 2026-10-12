@@ -156,4 +156,136 @@ describe('App server-backed screens', () => {
     expect(screen.getByRole('heading', { name: 'Rodada 1 de 3' })).toBeInTheDocument();
     expect(screen.queryByText('Salvando configurações…')).not.toBeInTheDocument();
   });
+
+  async function enterLobbyAsHost() {
+    vi.stubGlobal('WebSocket', AppWebSocket);
+    let requestNumber = 0;
+    vi.stubGlobal('crypto', { randomUUID: vi.fn(() => `request-${++requestNumber}`) });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'ABC234' }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    render(
+      <ToastProvider>
+        <App />
+      </ToastProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Seu Apelido no Jogo'), { target: { value: 'Host' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Criar Sala e Convidar Amigos/ }));
+    });
+    const socket = AppWebSocket.instances[0];
+    act(() => socket.onopen?.(new Event('open')));
+    act(() => socket.emit({ type: 'session:ready', negotiatedProtocolVersion: 1, playerId: 'host-id' }));
+    act(() => socket.emit({
+      type: 'room:joined',
+      requestId: 'request-1',
+      playerId: 'host-id',
+      resumeToken: 'token-host',
+    }));
+    act(() => socket.emit({
+      type: 'room:state',
+      state: {
+        code: 'ABC234',
+        phase: 'CONFIGURING',
+        players: [{ id: 'host-id', nickname: 'Host', isHost: true, status: 'active', score: 0 }],
+        categories: [{ id: 'cat-0', name: 'Nome' }],
+        currentRound: 0,
+        totalRounds: 3,
+      },
+    }));
+    return socket;
+  }
+
+  it('returns to the home screen when room:closed is received', async () => {
+    const socket = await enterLobbyAsHost();
+    expect(screen.getByRole('heading', { name: /Sala Privada:/ })).toBeInTheDocument();
+
+    act(() => socket.emit({ type: 'room:closed', reason: 'host_closed', requestId: 'close-1' }));
+
+    expect(screen.getByRole('heading', { name: /Grite STOP primeiro/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Sala Privada:/ })).not.toBeInTheDocument();
+  });
+
+  it('sends room:leave and returns home on leave ack without opening the podium', async () => {
+    const socket = await enterLobbyAsHost();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    const leaveCommand = JSON.parse(socket.sent[socket.sent.length - 1]);
+    expect(leaveCommand).toMatchObject({ type: 'room:leave' });
+    expect(leaveCommand.requestId).toMatch(/^request-\d+$/);
+
+    act(() => socket.emit({
+      type: 'game:final_results',
+      podium: [{ playerId: 'guest-id', nickname: 'Guest', score: 10, position: 1, tier: 'gold' }],
+      list: [],
+    }));
+    expect(screen.queryByRole('heading', { name: /Pódio Final/ })).not.toBeInTheDocument();
+
+    act(() => socket.emit({
+      type: 'command:ack',
+      requestId: leaveCommand.requestId,
+      commandType: 'room:leave',
+      status: 'committed',
+    }));
+
+    expect(screen.getByRole('heading', { name: /Grite STOP primeiro/ })).toBeInTheDocument();
+  });
+
+  it('opens the close confirmation dialog and sends room:close on confirm', async () => {
+    const socket = await enterLobbyAsHost();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar sala' }));
+    expect(screen.getByRole('dialog', { name: 'Encerrar e deletar sala?' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar e deletar' }));
+    const closeCommand = JSON.parse(socket.sent[socket.sent.length - 1]);
+    expect(closeCommand).toMatchObject({ type: 'room:close' });
+    expect(closeCommand.requestId).toMatch(/^request-\d+$/);
+
+    act(() => socket.emit({
+      type: 'room:closed',
+      reason: 'host_closed',
+      requestId: closeCommand.requestId,
+    }));
+
+    expect(screen.getByRole('heading', { name: /Grite STOP primeiro/ })).toBeInTheDocument();
+  });
+
+  it('navigates to the podium when the host closes during an active match', async () => {
+    const socket = await enterLobbyAsHost();
+    const categories = [{ id: 'cat-0', name: 'Nome' }];
+
+    act(() => socket.emit({
+      type: 'round:started',
+      id: 'round-1',
+      roundNumber: 1,
+      letter: 'A',
+      categories,
+    }));
+    expect(screen.getByRole('heading', { name: 'Rodada 1 de 3' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar sala' }));
+    expect(screen.getByRole('dialog', { name: 'Encerrar a partida agora?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar e ver pódio' }));
+
+    const closeCommand = JSON.parse(socket.sent[socket.sent.length - 1]);
+    expect(closeCommand).toMatchObject({ type: 'room:close' });
+
+    act(() => socket.emit({
+      type: 'game:final_results',
+      podium: [{ playerId: 'host-id', nickname: 'Host', score: 12, position: 1, tier: 'gold' }],
+      list: [{ playerId: 'guest-id', nickname: 'Guest', score: 4, position: 2 }],
+    }));
+    act(() => socket.emit({
+      type: 'command:ack',
+      requestId: closeCommand.requestId,
+      commandType: 'room:close',
+      status: 'committed',
+    }));
+
+    expect(screen.getByRole('heading', { name: /Pódio Final/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Grite STOP primeiro/ })).not.toBeInTheDocument();
+  });
 });
